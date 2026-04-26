@@ -19,7 +19,7 @@ interface AuthState {
 
 interface AuthContextValue extends AuthState {
   login: (email: string, password: string, redirectTo?: string) => Promise<void>;
-  signup: (name: string, email: string, password: string, role?: string, redirectTo?: string) => Promise<void>;
+  signup: (name: string, email: string, password: string, role?: string, redirectTo?: string, teacherCode?: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -95,8 +95,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signup = useCallback(
-    async (name: string, email: string, password: string, role?: string, redirectTo?: string) => {
-      const res = await apiSignup({ name, email, password, role: role || "student" });
+    async (name: string, email: string, password: string, role?: string, redirectTo?: string, teacherCode?: string) => {
+      const res = await apiSignup({ name, email, password, role: role || "student", teacher_code: teacherCode });
       setToken(res.access_token);
       setUser(res.user);
       setState({

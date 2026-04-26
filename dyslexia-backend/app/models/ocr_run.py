@@ -14,7 +14,6 @@ class OCRRun(Base):
     student_id = Column(String(64), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     quality_mode = Column(String(64), default="quality_local")
-    raw_text = Column(Text, default="")
     corrected_text = Column(Text, default="")
     avg_confidence = Column(Float, default=0.0)
     suspicious_lines = Column(Integer, default=0)

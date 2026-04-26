@@ -13,7 +13,7 @@ export function LandingPage() {
           Dyslexia Learning Assistant.
         </p>
         <div className="landing-actions">
-          <Link to="/signup" className="primary-button landing-cta">
+          <Link to="/signup?fresh=1" className="primary-button landing-cta">
             Get Started
           </Link>
           <Link to="/login" className="secondary-button">

@@ -15,6 +15,23 @@ from app.models.user import User
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 
+def _path_to_url_path(file_path: str | None) -> str | None:
+    if not file_path:
+        return None
+    normalized = str(file_path).replace("\\", "/")
+    idx = normalized.find("/data/")
+    if idx != -1:
+        return normalized[idx:]
+    if "data" in normalized:
+        parts = normalized.split("/")
+        try:
+            data_idx = parts.index("data")
+            return "/data/" + "/".join(parts[data_idx + 1:])
+        except ValueError:
+            pass
+    return None
+
+
 @router.get("/overview")
 def get_overview(
     db: Session = Depends(get_db),
@@ -27,9 +44,8 @@ def get_overview(
     rows = base.with_entities(func.avg(OCRRun.avg_confidence).label("avg_conf")).first()
     avg_confidence = float(rows.avg_conf or 0) if rows else 0.0
     corrected_count = base.filter(
-        OCRRun.raw_text != OCRRun.corrected_text,
-        OCRRun.raw_text.isnot(None),
         OCRRun.corrected_text.isnot(None),
+        OCRRun.corrected_text != "",
     ).count()
     avg_correction_ratio = corrected_count / total_runs if total_runs else 0
     return {
@@ -54,22 +70,41 @@ def get_history(
         .limit(100)
         .all()
     )
-    return [
-        {
-            "run_id": r.id,
-            "student_id": int(r.student_id) if r.student_id and str(r.student_id).isdigit() else None,
-            "student_name": None,
-            "created_at": r.created_at.isoformat() if r.created_at else "",
-            "quality_mode": r.quality_mode or "quality_local",
-            "raw_text": r.raw_text or "",
-            "corrected_text": r.corrected_text or "",
-            "avg_confidence": r.avg_confidence or 0,
-            "suspicious_lines": r.suspicious_lines or 0,
-            "review_status": r.review_status,
-            "reviewed_text": r.reviewed_text,
-        }
-        for r in runs
-    ]
+
+    student_ids = [str(r.student_id) for r in runs if r.student_id]
+    student_name_map: dict[str, str] = {}
+    if student_ids:
+        for sid, sname in (
+            db.query(Student.id, Student.name)
+            .filter(Student.id.in_(student_ids))
+            .all()
+        ):
+            student_name_map[str(sid)] = sname
+
+    payload: list[dict] = []
+    for r in runs:
+        corrected_text = (r.corrected_text or r.reviewed_text or "").strip()
+
+        # Keep only runs with usable corrected text.
+        if not corrected_text:
+            continue
+
+        payload.append(
+            {
+                "run_id": r.id,
+                "student_id": int(r.student_id) if r.student_id and str(r.student_id).isdigit() else None,
+                "student_name": student_name_map.get(str(r.student_id), None),
+                "created_at": r.created_at.isoformat() if r.created_at else "",
+                "corrected_text": corrected_text,
+                "avg_confidence": r.avg_confidence or 0,
+                "suspicious_lines": r.suspicious_lines or 0,
+                "review_status": r.review_status,
+                "reviewed_text": r.reviewed_text,
+                "original_image_path": r.original_image_path,
+                "original_image_url": _path_to_url_path(r.original_image_path),
+            }
+        )
+    return payload
 
 
 @router.get("/students/progress")

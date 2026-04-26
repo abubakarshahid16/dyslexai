@@ -106,7 +106,16 @@ Your Task:
             temperature=0.1,
             max_tokens=1024,
         )
-        return completion.choices[0].message.content.strip() or text
+        corrected = (completion.choices[0].message.content or "").strip()
+        if corrected:
+            return corrected
+        from app.services.llm import correct_ocr_text
+        return correct_ocr_text(text)
     except Exception as e:
         logger.warning("Groq correction failed: %s", e)
-        return text
+        try:
+            from app.services.llm import correct_ocr_text
+            return correct_ocr_text(text)
+        except Exception as fallback_error:
+            logger.warning("Fallback correction failed: %s", fallback_error)
+            return text

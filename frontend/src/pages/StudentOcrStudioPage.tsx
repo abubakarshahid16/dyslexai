@@ -5,6 +5,7 @@ import { toAssetUrl } from "../lib/api";
 import type { OCRRun } from "../types";
 import { useAuth } from "../contexts/AuthContext";
 import { OcrHistoryPanel } from "../components/OcrHistoryPanel";
+import { ImageCropUploader } from "../components/ImageCropUploader";
 
 export default function StudentOcrStudioPage() {
   const { user } = useAuth();
@@ -22,7 +23,7 @@ export default function StudentOcrStudioPage() {
     if (!file) return;
     setBusy(true);
     setError(null);
-    setStatus("Processing… DocTR segmentation + TrOCR Large handwritten + correction.");
+    setStatus("Processing… grayscale -> segmentation -> OCR -> correction.");
     try {
       const response = await processImage({
         file,
@@ -62,31 +63,28 @@ export default function StudentOcrStudioPage() {
         <div>
           <span className="hero-badge">OCR Studio</span>
           <h1>Handwriting OCR</h1>
-          <p>Upload a handwriting photo. You will see raw OCR text and corrected text.</p>
+          <p>Upload a handwriting photo. You will see the corrected text from your image.</p>
         </div>
       </section>
 
       <div className="card">
         <h3>Upload handwriting image</h3>
-        <div className="form-row" style={{ alignItems: "center" }}>
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/webp,image/bmp,image/tiff"
-            disabled={busy}
-            onChange={(e) => {
-              const f = e.target.files?.[0] ?? null;
+        <div className="upload-crop-row">
+          <ImageCropUploader
+            busy={busy}
+            onFileChange={(f) => {
               setFile(f);
               setResult(null);
               setError(null);
               setStatus(null);
             }}
           />
-          <button onClick={handleUpload} disabled={!canSubmit}>
+          <button type="button" onClick={handleUpload} disabled={!canSubmit}>
             {busy ? "Processing…" : "Convert to text"}
           </button>
         </div>
         <p style={{ color: "var(--color-text-secondary)", marginTop: 10 }}>
-          Tip: crop tightly around the handwriting and keep the photo bright.
+          Tip: crop tightly around handwriting before converting.
         </p>
       </div>
 
@@ -113,11 +111,6 @@ export default function StudentOcrStudioPage() {
           </div>
 
           <div className="card">
-            <h3>Raw OCR text</h3>
-            <textarea className="text-area" value={result.raw_text || ""} readOnly rows={10} style={{ width: "100%", resize: "vertical" }} />
-          </div>
-
-          <div className="card">
             <h3>Corrected text</h3>
             <textarea
               className="text-area"
@@ -130,7 +123,7 @@ export default function StudentOcrStudioPage() {
         </>
       ) : null}
 
-      <OcrHistoryPanel />
+      <OcrHistoryPanel refreshKey={result?.run_id ?? null} />
     </div>
   );
 }

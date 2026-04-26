@@ -4,6 +4,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import inspect, text
 
 from app.core.config import ROOT_DIR, get_settings
 from app.database import engine, Base, IS_SQLITE
@@ -43,6 +44,28 @@ app.add_middleware(
 )
 
 Base.metadata.create_all(bind=engine)
+
+
+def _ensure_supabase_user_column() -> None:
+    """Backfill schema for existing deployments where create_all cannot alter tables."""
+    try:
+        inspector = inspect(engine)
+        cols = {c["name"] for c in inspector.get_columns("users")}
+        if "supabase_user_id" in cols:
+            return
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE users ADD COLUMN supabase_user_id VARCHAR(64)"))
+            # SQLite does not support IF NOT EXISTS for index on older versions.
+            try:
+                conn.execute(text("CREATE UNIQUE INDEX ix_users_supabase_user_id ON users (supabase_user_id)"))
+            except Exception:
+                pass
+        print("[DyslexAI] Added users.supabase_user_id for Supabase Auth mapping.")
+    except Exception as e:
+        print(f"[DyslexAI] Supabase auth schema update skip: {e}")
+
+
+_ensure_supabase_user_column()
 
 # Auto-seed Game Mode curriculum from seed_data_90_days.html (repo root) if DB is empty
 try:

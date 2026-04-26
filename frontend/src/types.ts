@@ -27,13 +27,13 @@ export type HistoryItem = {
   student_id?: number | null;
   student_name?: string | null;
   created_at: string;
-  quality_mode: string;
-  raw_text: string;
   corrected_text: string;
   avg_confidence: number;
   suspicious_lines: number;
   review_status?: string | null;
   reviewed_text?: string | null;
+  original_image_path?: string | null;
+  original_image_url?: string | null;
 };
 
 export type OCRLine = {
@@ -93,7 +93,6 @@ export type OCRRun = {
   run_id: number;
   upload_id: number;
   student_id?: number | null;
-  raw_text: string;
   corrected_text: string;
   metadata: Record<string, unknown>;
   original_image_path?: string | null;

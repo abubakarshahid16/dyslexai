@@ -148,7 +148,7 @@ export function TeacherDashboardPage() {
         <div>
           <span className="hero-badge">Teacher Dashboard</span>
           <h1>
-            Welcome, {user?.name}! <KidIcon name="wave" />
+            Hello, {user?.name}! <KidIcon name="wave" />
           </h1>
           <p>
             Overview of all students, their progress, and attendance tracking.

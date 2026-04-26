@@ -18,7 +18,6 @@ from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.correction.notebook_layers import get_groq_correction, layer_1_sanitize, layer_2_dyslexia_fix
 from app.ocr.engines.notebook_engine import NotebookOCREngine
-from app.ocr.triage import ImageTriage
 from app.ocr.types import OCRLine, OCRResult, TriageResult
 from app.utils.diffing import acceptance_gate, levenshtein_ops
 
@@ -45,7 +44,16 @@ class NotebookPipeline:
         if img is None:
             raise ValueError(f"Could not read image: {image_path}")
 
-        triage = ImageTriage.analyze(img)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        triage = TriageResult(
+            blur_score=0.0,
+            brightness=float(gray.mean()),
+            contrast=float(gray.std()),
+            is_low_contrast=False,
+            estimated_skew_angle=0.0,
+            should_threshold=False,
+            should_deskew=False,
+        )
         engine = self._get_engine()
         lines, base_paragraph = engine.run(image_path)
 

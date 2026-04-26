@@ -1,25 +1,46 @@
 import { useState } from "react";
-import { Link, Navigate, useLocation } from "react-router-dom";
+import { Link, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { signup as apiSignup } from "../lib/api";
 import { KidIcon } from "../components/KidIcon";
 
 export function SignupPage() {
-  const { authenticated, signup } = useAuth();
+  const { authenticated } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname;
+  const forceSignup = new URLSearchParams(location.search).get("fresh") === "1";
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [teacherCode, setTeacherCode] = useState("");
   const [role, setRole] = useState<"student" | "teacher">("student");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [success, setSuccess] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+
     setBusy(true);
     try {
-      await signup(name, email, password, role, from || "/dashboard");
+      await apiSignup({
+        name,
+        email,
+        password,
+        role,
+        teacher_code: role === "teacher" ? teacherCode : undefined,
+      });
+      setSuccess(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Signup failed");
     } finally {
@@ -27,7 +48,27 @@ export function SignupPage() {
     }
   }
 
-  if (authenticated) return <Navigate to={from || "/dashboard"} replace />;
+  if (authenticated && !forceSignup) return <Navigate to={from || "/dashboard"} replace />;
+
+  if (success) {
+    return (
+      <div className="auth-page">
+        <div className="auth-card" style={{ textAlign: "center" }}>
+          <div style={{ fontSize: "3rem", marginBottom: 12 }}>🎉</div>
+          <h1 style={{ marginBottom: 8 }}>Account Created!</h1>
+          <p className="auth-subtitle" style={{ marginBottom: 24 }}>
+            Your account has been successfully created. Please log in to continue.
+          </p>
+          <button
+            className="primary-button auth-submit"
+            onClick={() => navigate("/login", { replace: true })}
+          >
+            Go to Login
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="auth-page">
@@ -82,7 +123,7 @@ export function SignupPage() {
           <label className="field">
             <span>Password</span>
             <input
-              type="password"
+              type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
@@ -91,6 +132,43 @@ export function SignupPage() {
               disabled={busy}
             />
           </label>
+          <label className="field">
+            <span>Confirm Password</span>
+            <input
+              type={showPassword ? "text" : "password"}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="••••••••"
+              required
+              minLength={6}
+              disabled={busy}
+            />
+          </label>
+          <label className="auth-password-toggle">
+            <input
+              type="checkbox"
+              checked={showPassword}
+              onChange={(e) => setShowPassword(e.target.checked)}
+              disabled={busy}
+            />
+            <span>Show password</span>
+          </label>
+          {role === "teacher" && (
+            <label className="field">
+              <span>Teacher Access Code</span>
+              <input
+                type="password"
+                value={teacherCode}
+                onChange={(e) => setTeacherCode(e.target.value)}
+                placeholder="Enter your access code"
+                required
+                disabled={busy}
+              />
+              <span style={{ fontSize: "0.78rem", color: "var(--color-text-secondary)", marginTop: 4 }}>
+                Contact your administrator for the teacher access code.
+              </span>
+            </label>
+          )}
           <button type="submit" className="primary-button auth-submit" disabled={busy}>
             {busy ? "Signing up…" : "Sign Up"}
           </button>

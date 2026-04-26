@@ -178,7 +178,7 @@ export function DashboardPage() {
           <div>
             <span className="hero-badge">My Progress</span>
             <h1>
-              Welcome back, {user?.name}! <KidIcon name="wave" />
+              Hello, {user?.name}! <KidIcon name="wave" />
             </h1>
             <p>Here's your exercise progress and performance summary.</p>
           </div>

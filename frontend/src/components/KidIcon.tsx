@@ -205,12 +205,12 @@ export function KidIcon({ name, className, style }: Props) {
             strokeWidth="2"
           />
           <path
-            d="M19.4 15a1.7 1.7 0 0 0 .33 1.87l.06.06-1.5 2.6-0.08-.03a2 2 0 0 0-2.2.4l-.06.06-2.9-1.7.02-.08a2 2 0 0 0-1.2-2.2H9.9a2 2 0 0 0-1.4-0.2l-.08.03-1.5-2.6.06-.06a1.7 1.7 0 0 0 .33-1.87l-.03-.08 2.9-1.7.06.06a2 2 0 0 0 2.2.4l.08-.03 1.5-2.6-.06-.06A1.7 1.7 0 0 0 14.6 4.7l.08-.03 2.6 1.5-.03.08a2 2 0 0 0 .4 2.2l.06.06 1.7 2.9-.06.06a2 2 0 0 0-0.4 2.2l.03.08-1.7 2.9Z"
+            d="M12 2.75v2.2M12 19.05v2.2M4.95 12h-2.2M21.25 12h-2.2M5.88 5.88l1.56 1.56M18.56 18.56l-1.56-1.56M18.56 5.88 17 7.44M5.88 18.56 7.44 17"
             stroke="currentColor"
-            strokeWidth="1.2"
-            strokeLinejoin="round"
-            opacity="0.45"
+            strokeWidth="2"
+            strokeLinecap="round"
           />
+          <circle cx="12" cy="12" r="7.2" stroke="currentColor" strokeWidth="1.8" opacity="0.7" />
         </svg>
       );
     case "wave":

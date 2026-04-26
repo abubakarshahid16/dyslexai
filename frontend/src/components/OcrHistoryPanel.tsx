@@ -1,14 +1,24 @@
 import { useEffect, useState } from "react";
-import { fetchHistory } from "../lib/api";
+import { fetchHistory, toAssetUrl } from "../lib/api";
 import type { HistoryItem } from "../types";
 import { useAuth } from "../contexts/AuthContext";
 
-export function OcrHistoryPanel({ limit = 8 }: { limit?: number }) {
+type Props = {
+  limit?: number;
+  refreshKey?: string | number | null;
+};
+
+export function OcrHistoryPanel({ limit = 8, refreshKey }: Props) {
   const { user } = useAuth();
   const isTeacher = user?.role === "teacher";
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [selectedRun, setSelectedRun] = useState<HistoryItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  function toggleSelectedRun(item: HistoryItem) {
+    setSelectedRun((prev) => (prev?.run_id === item.run_id ? null : item));
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -17,7 +27,18 @@ export function OcrHistoryPanel({ limit = 8 }: { limit?: number }) {
     fetchHistory()
       .then((items) => {
         if (cancelled) return;
-        setHistory(items.slice(0, limit));
+        const normalized = items
+          .map((item) => {
+            const corrected = (item.corrected_text || item.reviewed_text || "").trim();
+            return {
+              ...item,
+              corrected_text: corrected,
+            };
+          })
+          .filter((item) => item.corrected_text);
+        const next = normalized.slice(0, limit);
+        setHistory(next);
+        setSelectedRun((prev) => (prev && next.some((h) => h.run_id === prev.run_id) ? prev : null));
       })
       .catch((e) => {
         if (cancelled) return;
@@ -31,7 +52,7 @@ export function OcrHistoryPanel({ limit = 8 }: { limit?: number }) {
     return () => {
       cancelled = true;
     };
-  }, [limit]);
+  }, [limit, refreshKey]);
 
   return (
     <div className="card" style={{ marginTop: 16 }}>
@@ -54,11 +75,23 @@ export function OcrHistoryPanel({ limit = 8 }: { limit?: number }) {
           {history.map((item) => (
             <div
               key={item.run_id}
+              role="button"
+              tabIndex={0}
+              onClick={() => toggleSelectedRun(item)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  toggleSelectedRun(item);
+                }
+              }}
               style={{
                 padding: 12,
                 borderRadius: 14,
-                border: "1px solid var(--color-divider)",
-                background: "var(--color-surface-soft)"
+                border: selectedRun?.run_id === item.run_id
+                  ? "2px solid var(--color-primary)"
+                  : "1px solid var(--color-divider)",
+                background: "var(--color-surface-soft)",
+                cursor: "pointer"
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
@@ -84,21 +117,36 @@ export function OcrHistoryPanel({ limit = 8 }: { limit?: number }) {
                 <div style={{ color: "var(--color-text-secondary)", fontSize: 12 }}>{new Date(item.created_at).toLocaleString()}</div>
               </div>
 
-              <div style={{ marginTop: 8, color: "var(--color-text-secondary)", fontSize: 12 }}>
-                Mode: {item.quality_mode} • Confidence: {(item.avg_confidence * 100).toFixed(1)}%
-              </div>
-
-              <div style={{ marginTop: 8 }}>
-                <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.85 }}>Raw</div>
-                <div style={{ fontSize: 13, whiteSpace: "pre-wrap" }}>{(item.raw_text || "").slice(0, 160) || "—"}</div>
-              </div>
-
               <div style={{ marginTop: 8 }}>
                 <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.85 }}>Corrected</div>
-                <div style={{ fontSize: 13, whiteSpace: "pre-wrap" }}>{(item.corrected_text || "").slice(0, 160) || "—"}</div>
+                <div style={{ fontSize: 13, whiteSpace: "pre-wrap" }}>{(item.corrected_text || "").slice(0, 180) || "—"}</div>
+                <div style={{ marginTop: 6, fontSize: 12, color: "var(--color-text-secondary)" }}>
+                  Click to view original image and full corrected text
+                </div>
               </div>
             </div>
           ))}
+        </div>
+      ) : null}
+
+      {!loading && !error && selectedRun ? (
+        <div style={{ marginTop: 14, display: "grid", gap: 12 }}>
+          <div style={{ fontWeight: 800 }}>Selected Run Details</div>
+          <div>
+            {toAssetUrl(selectedRun.original_image_path, selectedRun.original_image_url) ? (
+              <img
+                src={toAssetUrl(selectedRun.original_image_path, selectedRun.original_image_url) ?? undefined}
+                alt="OCR run original"
+                style={{ width: "100%", maxWidth: 760, borderRadius: 14, border: "1px solid var(--color-divider)" }}
+              />
+            ) : (
+              <p style={{ color: "var(--color-text-secondary)" }}>Original image not available.</p>
+            )}
+          </div>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.85, marginBottom: 6 }}>Corrected</div>
+            <div style={{ whiteSpace: "pre-wrap", fontSize: 14 }}>{selectedRun.corrected_text || "—"}</div>
+          </div>
         </div>
       ) : null}
     </div>

@@ -5,6 +5,7 @@ import { toAssetUrl } from "../lib/api";
 import type { OCRRun } from "../types";
 import { useAuth } from "../contexts/AuthContext";
 import { OcrHistoryPanel } from "../components/OcrHistoryPanel";
+import { ImageCropUploader } from "../components/ImageCropUploader";
 
 export function WorkspacePage() {
   const [result, setResult] = useState<OCRRun | null>(null);
@@ -22,7 +23,7 @@ export function WorkspacePage() {
     if (!file) return;
     setBusy(true);
     setError(null);
-    setStatus("Processing… DocTR segmentation + TrOCR Large + correction (first run may take 30–90s).");
+    setStatus("Processing… grayscale -> segmentation -> OCR -> correction.");
     try {
       const response = await processImage({
         file,
@@ -70,33 +71,28 @@ export function WorkspacePage() {
       ) : (
         <div className="card">
           <h3>Upload handwriting image</h3>
-          <div className="form-row" style={{ alignItems: "center" }}>
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/bmp,image/tiff"
-              disabled={busy}
-              onChange={(e) => {
-                const f = e.target.files?.[0] ?? null;
+          <div className="upload-crop-row">
+            <ImageCropUploader
+              busy={busy}
+              onFileChange={(f) => {
                 setFile(f);
                 setResult(null);
                 setError(null);
                 setStatus(null);
               }}
             />
-            <button onClick={handleUpload} disabled={!canSubmit}>
+            <button type="button" onClick={handleUpload} disabled={!canSubmit}>
               {busy ? "Processing…" : "Convert to text"}
             </button>
           </div>
           <p style={{ color: "var(--color-text-secondary)", marginTop: 10 }}>
-            Tip: crop tightly around the paragraph and ensure good lighting for best results.
+            Tip: crop tightly around the paragraph before converting.
           </p>
         </div>
       )}
 
       {error ? <div className="error-banner">{error}</div> : null}
       {status ? <div className="card"><p>{status}</p></div> : null}
-
-      <OcrHistoryPanel />
 
       {result && (
         <>
@@ -113,16 +109,6 @@ export function WorkspacePage() {
             )}
           </div>
           <div className="card">
-            <h3>Raw text</h3>
-            <textarea
-              className="text-area"
-              value={result.raw_text || ""}
-              readOnly
-              rows={10}
-              style={{ width: "100%", resize: "vertical" }}
-            />
-          </div>
-          <div className="card">
             <h3>Corrected text</h3>
             <textarea
               className="text-area"
@@ -134,6 +120,8 @@ export function WorkspacePage() {
           </div>
         </>
       )}
+
+      <OcrHistoryPanel limit={30} refreshKey={result?.run_id ?? null} />
     </div>
   );
 }

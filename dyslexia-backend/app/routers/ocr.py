@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import io
 import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from PIL import Image
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -13,6 +15,7 @@ from app.database import get_db
 from app.deps import get_current_user
 from app.models.ocr_run import OCRRun
 from app.models.user import User
+from app.services.llm import correct_ocr_text_with_image
 from app.utils.diffing import levenshtein_ops
 
 router = APIRouter(prefix="/api/ocr", tags=["ocr"])
@@ -98,8 +101,13 @@ async def process_upload(
     with open(original_path, "wb") as f:
         f.write(image_bytes)
 
+    try:
+        grayscale = Image.open(io.BytesIO(image_bytes)).convert("L")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid image file: {str(e)}")
+
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
-        f.write(image_bytes)
+        grayscale.save(f, format="PNG")
         path = f.name
 
     try:
@@ -110,6 +118,24 @@ async def process_upload(
     finally:
         Path(path).unlink(missing_ok=True)
 
+    # Final correction pass: cross-check rough OCR text with original image using Groq vision.
+    vision_applied = False
+    vision_error: str | None = None
+    final_corrected_text = result.raw_text or ""
+    if (result.raw_text or "").strip():
+        try:
+            vision_corrected = correct_ocr_text_with_image(
+                rough_text=result.raw_text or "",
+                image_path=str(original_path),
+            )
+            if (vision_corrected or "").strip():
+                final_corrected_text = vision_corrected.strip()
+                vision_applied = True
+        except Exception as e:
+            vision_error = str(e)
+
+    result.corrected_text = final_corrected_text
+
     lines_json = [_line_to_dict(line) for line in result.lines]
     avg_conf = sum(line.confidence for line in result.lines) / max(1, len(result.lines)) if result.lines else 0
     suspicious = sum(1 for line in result.lines if getattr(line, "suspicious", False))
@@ -118,8 +144,7 @@ async def process_upload(
         user_id=current_user.id,
         student_id=str(student_id) if student_id is not None else None,
         quality_mode=quality_mode or "quality_local",
-        raw_text=result.raw_text or "",
-        corrected_text=result.corrected_text or "",
+        corrected_text=final_corrected_text,
         avg_confidence=avg_conf,
         suspicious_lines=suspicious,
         original_image_path=str(original_path),
@@ -129,9 +154,12 @@ async def process_upload(
     db.refresh(run)
 
     metadata = dict(result.metadata or {})
+    metadata["groq_vision_applied"] = vision_applied
+    if vision_error:
+        metadata["groq_vision_error"] = vision_error
     if reference_text and reference_text.strip():
         raw = result.raw_text or ""
-        corrected = result.corrected_text or ""
+        corrected = final_corrected_text
         cer = sum(c != r for c, r in zip(corrected, raw)) / max(1, len(raw)) if raw else 0
         metadata["transcript_evaluation"] = {
             "reference_length": len(reference_text),
@@ -158,8 +186,7 @@ async def process_upload(
         "run_id": run.id,
         "upload_id": run.id,
         "student_id": int(student_id) if student_id is not None and str(student_id).isdigit() else None,
-        "raw_text": result.raw_text or "",
-        "corrected_text": result.corrected_text or "",
+        "corrected_text": final_corrected_text,
         "metadata": metadata,
         "original_image_path": str(original_path),
         "original_image_url": original_url,
@@ -168,7 +195,7 @@ async def process_upload(
         "correction_layer1": result.correction_layer1,
         "correction_layer2": result.correction_layer2,
         "correction_layer3": result.correction_layer3,
-        "correction_layer4": result.corrected_text or "",
+        "correction_layer4": final_corrected_text,
         "lines": lines_json,
         "triage": triage_dict,
     }

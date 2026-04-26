@@ -8,6 +8,7 @@ export function LoginPage() {
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -47,13 +48,22 @@ export function LoginPage() {
           <label className="field">
             <span>Password</span>
             <input
-              type="password"
+              type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               required
               disabled={busy}
             />
+          </label>
+          <label className="auth-password-toggle">
+            <input
+              type="checkbox"
+              checked={showPassword}
+              onChange={(e) => setShowPassword(e.target.checked)}
+              disabled={busy}
+            />
+            <span>Show password</span>
           </label>
           <button type="submit" className="primary-button auth-submit" disabled={busy}>
             {busy ? "Logging in…" : "Log In"}

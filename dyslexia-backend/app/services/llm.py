@@ -1,12 +1,18 @@
 import os
 import json
+import base64
+import io
+import re
 from groq import Groq
 from dotenv import load_dotenv
+from PIL import Image
 
 load_dotenv()
 
 _client = None
+_vision_client = None
 MODEL  = "llama-3.3-70b-versatile"
+VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 
 def _get_client():
     global _client
@@ -16,6 +22,128 @@ def _get_client():
             raise RuntimeError("GROQ_API_KEY is not set — LLM features are unavailable")
         _client = Groq(api_key=api_key)
     return _client
+
+
+def _get_vision_client():
+    global _vision_client
+    if _vision_client is None:
+        api_key = os.getenv("GROQ_VISION_API_KEY") or os.getenv("GROQ_API_KEY")
+        if not api_key:
+            raise RuntimeError("GROQ_VISION_API_KEY is not set — vision OCR correction is unavailable")
+        _vision_client = Groq(api_key=api_key)
+    return _vision_client
+
+
+def _sanitize_model_text(text: str) -> str:
+    cleaned = (text or "").strip()
+    if not cleaned:
+        return ""
+
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```[a-zA-Z]*\n?", "", cleaned).strip()
+        cleaned = re.sub(r"\n?```$", "", cleaned).strip()
+
+    cleaned = re.sub(
+        r"^(corrected\s*(transcription|text)|final\s*transcription|transcription)\s*:\s*",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    ).strip()
+    return cleaned
+
+
+def _encode_image_for_vision(image_path: str, max_raw_bytes: int = 3_000_000) -> str:
+    with open(image_path, "rb") as image_file:
+        original_bytes = image_file.read()
+    if len(original_bytes) <= max_raw_bytes:
+        return base64.b64encode(original_bytes).decode("utf-8")
+
+    img = Image.open(io.BytesIO(original_bytes)).convert("RGB")
+    img.thumbnail((2000, 2000), Image.Resampling.LANCZOS)
+    for quality in (85, 75, 65, 55, 45):
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=quality, optimize=True)
+        compressed = buf.getvalue()
+        if len(compressed) <= max_raw_bytes:
+            return base64.b64encode(compressed).decode("utf-8")
+
+    # Return best-effort compressed image even if still above threshold.
+    return base64.b64encode(compressed).decode("utf-8")
+
+
+def correct_ocr_text(text: str) -> str:
+    """
+    Correct OCR text using the same LLM API/client stack used in this service.
+    Returns the original text if the API is unavailable or response is empty.
+    """
+    if not text or not text.strip():
+        return text
+
+    prompt = f"""You are an expert English editor for OCR outputs.
+Fix spelling and grammar errors while preserving the original meaning.
+Do not add extra explanation.
+Return only the corrected text.
+
+Text:
+{text}
+"""
+
+    try:
+        response = _get_client().chat.completions.create(
+            model=MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=512,
+            temperature=0.1,
+        )
+        corrected = (response.choices[0].message.content or "").strip()
+        return corrected or text
+    except Exception as e:
+        print(f"OCR correction fallback failed: {e}")
+        return text
+
+
+def correct_ocr_text_with_image(*, rough_text: str, image_path: str) -> str:
+    """
+    Cross-check rough OCR text against the original image using Groq vision.
+    Returns only cleaned corrected transcription text, or the rough text on failure.
+    """
+    rough = (rough_text or "").strip()
+    if not rough:
+        return rough_text
+
+    try:
+        base64_image = _encode_image_for_vision(image_path)
+        prompt = (
+            "You are an OCR correction model. Read the image carefully and return only the final corrected transcription from the image. "
+            "Use the rough OCR text only as a helper cross-check if it helps you spot mistakes. "
+            "Return ONLY the corrected transcription text as plain text. "
+            "Do not add labels, markdown, quotes, commentary, or explanations.\n\n"
+            f"Rough OCR text to cross-check:\n{rough}"
+        )
+
+        completion = _get_vision_client().chat.completions.create(
+            model=VISION_MODEL,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
+                        },
+                    ],
+                }
+            ],
+            temperature=0.1,
+            max_tokens=1200,
+        )
+
+        corrected = _sanitize_model_text(completion.choices[0].message.content or "")
+        return corrected or rough
+    except Exception as e:
+        print(f"Vision OCR correction failed: {e}")
+        return rough
 
 
 def generate_feedback(

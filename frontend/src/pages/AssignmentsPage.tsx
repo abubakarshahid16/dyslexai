@@ -48,6 +48,29 @@ function cleanAssignmentPrompt(type: AssignmentExerciseType, content: string, ex
   return e || c;
 }
 
+const SINGLE_WORD_PATTERN = /^[a-z]+(?:[-'][a-z]+)*$/i;
+
+function normalizeExpectedAnswer(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function validateExpectedByType(type: AssignmentExerciseType, rawValue: string): string | null {
+  const value = normalizeExpectedAnswer(rawValue);
+  if (!value) return "Expected answer is required.";
+
+  const tokenCount = (value.match(/[a-z]+(?:[-'][a-z]+)*/gi) || []).length;
+  if (type === "word_typing" && !SINGLE_WORD_PATTERN.test(value)) {
+    return "Word typing must be a single word only (no sentence).";
+  }
+  if (type === "sentence_typing" && tokenCount < 2) {
+    return "Sentence typing must contain a sentence (at least two words).";
+  }
+  if (type === "tracing" && !SINGLE_WORD_PATTERN.test(value)) {
+    return "Tracing must be a single letter or single word (not a sentence).";
+  }
+  return null;
+}
+
 function TeacherAssignments() {
   const [students, setStudents] = useState<ExerciseStudent[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(true);
@@ -74,6 +97,18 @@ function TeacherAssignments() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  const customExpectedError = useMemo(
+    () => validateExpectedByType(cxType, cxExpected),
+    [cxType, cxExpected]
+  );
+
+  const customExpectedHint = useMemo(() => {
+    if (cxType === "word_typing") return "Use one word only (example: friend).";
+    if (cxType === "sentence_typing") return "Use a full sentence (example: my friend went to school).";
+    if (cxType === "tracing") return "Use one letter or one word only (example: a or friend).";
+    return "Use a word or short sentence.";
+  }, [cxType]);
+
   useEffect(() => {
     setLoadingStudents(true);
     fetchExerciseStudents()
@@ -89,21 +124,30 @@ function TeacherAssignments() {
   }, [studentId, title, mode, customList.length, genCount, genDifficulty, genType]);
 
   async function handleAddCustom() {
-    if (!cxExpected.trim()) return;
-    const extractedTargets = cxExpected
+    const normalizedExpected = normalizeExpectedAnswer(cxExpected);
+    const validationError = validateExpectedByType(cxType, normalizedExpected);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    const extractedTargets = normalizedExpected
       .toLowerCase()
       .split(/[^a-zA-Z]+/g)
       .map((w) => w.trim())
       .filter(Boolean);
+
+    setError(null);
     setCustomList((p) => [
       ...p,
       {
         type: cxType,
-        content: cxExpected.trim(),
-        expected: cxExpected.trim(),
+        content: normalizedExpected,
+        expected: normalizedExpected,
         target_words: extractedTargets.join(","),
       },
     ]);
+    setCxExpected("");
   }
 
   async function handleCreate() {
@@ -296,15 +340,21 @@ function TeacherAssignments() {
                 <input
                   type="text"
                   value={cxExpected}
-                  onChange={(e) => setCxExpected(e.target.value)}
+                  onChange={(e) => {
+                    setCxExpected(e.target.value);
+                    if (error) setError(null);
+                  }}
                   disabled={busy}
-                  placeholder="Must match the content"
+                  placeholder={customExpectedHint}
                 />
+                <span style={{ color: customExpectedError ? "var(--color-error)" : "var(--color-text-muted)", fontSize: 13 }}>
+                  {customExpectedError || customExpectedHint}
+                </span>
               </label>
             </div>
             <div className="assignments-actions-row assignments-custom-actions">
               <div className="form-row">
-                <button className="primary-button" onClick={handleAddCustom} disabled={busy}>
+                <button className="primary-button" onClick={handleAddCustom} disabled={busy || !!customExpectedError}>
                   Add to assignment
                 </button>
                 <button className="primary-button" onClick={handleCreate} disabled={busy || !canCreate}>

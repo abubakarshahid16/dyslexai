@@ -25,18 +25,18 @@ import GamePuzzlePage from "./features/game-mode/pages/GamePuzzlePage";
 
 const studentNavItems: Array<{ to: string; label: string; icon: KidIconName }> = [
   { to: "/dashboard", label: "Dashboard", icon: "dashboard" },
-  { to: "/exercises", label: "Exercises", icon: "exercises" },
-  { to: "/assignments", label: "My Assignments", icon: "assignments" },
-  { to: "/ocr-studio", label: "OCR Studio", icon: "ocr" },
+  { to: "/exercises", label: "Exercises", icon: "pencil" },
+  { to: "/assignments", label: "My Assignments", icon: "clipboard" },
+  { to: "/ocr-studio", label: "OCR Studio", icon: "camera" },
   { to: "/game", label: "Daily Exercises", icon: "daily" },
   { to: "/settings", label: "Settings", icon: "settings" },
 ];
 
 const teacherNavItems: Array<{ to: string; label: string; icon: KidIconName }> = [
-  { to: "/dashboard", label: "Dashboard", icon: "dashboard" },
-  { to: "/workspace", label: "OCR Studio", icon: "ocr" },
-  { to: "/assignments", label: "Assignments", icon: "assignments" },
-  { to: "/students", label: "Students", icon: "students" },
+  { to: "/dashboard", label: "Dashboard", icon: "chart" },
+  { to: "/workspace", label: "OCR Studio", icon: "camera" },
+  { to: "/assignments", label: "Assignments", icon: "clipboard" },
+  { to: "/students", label: "Students", icon: "users" },
   { to: "/settings", label: "Settings", icon: "settings" },
 ];
 
@@ -54,7 +54,7 @@ function AppLayout() {
               </div>
               <div>
                 <strong>DyslexAI</strong>
-                <p>Dyslexia Learnning Support</p>
+                <p>Dyslexia Learning Support</p>
               </div>
             </NavLink>
 

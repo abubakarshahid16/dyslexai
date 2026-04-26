@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone, timedelta
+import re
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -22,6 +23,41 @@ router = APIRouter(prefix="/assignments", tags=["Assignments"])
 
 
 ExerciseType = Literal["word_typing", "sentence_typing", "handwriting", "tracing"]
+WORD_PATTERN = re.compile(r"^[a-z]+(?:[-'][a-z]+)*$", re.IGNORECASE)
+WORD_TOKEN_PATTERN = re.compile(r"[a-z]+(?:[-'][a-z]+)*", re.IGNORECASE)
+
+
+def _normalize_expected(expected: str) -> str:
+    return " ".join((expected or "").strip().split()).lower()
+
+
+def _validate_expected_for_type(ex_type: ExerciseType, expected: str) -> str:
+    normalized = _normalize_expected(expected)
+    if not normalized:
+        raise HTTPException(status_code=400, detail=f"{ex_type} expected answer is required")
+
+    token_count = len(WORD_TOKEN_PATTERN.findall(normalized))
+    is_single_word = bool(WORD_PATTERN.fullmatch(normalized))
+
+    if ex_type == "word_typing" and not is_single_word:
+        raise HTTPException(
+            status_code=400,
+            detail="word_typing expected answer must be a single word (no sentence)",
+        )
+
+    if ex_type == "sentence_typing" and token_count < 2:
+        raise HTTPException(
+            status_code=400,
+            detail="sentence_typing expected answer must be a sentence (at least two words)",
+        )
+
+    if ex_type == "tracing" and not is_single_word:
+        raise HTTPException(
+            status_code=400,
+            detail="tracing expected answer must be a single letter or single word",
+        )
+
+    return normalized
 
 
 class CustomExercise(BaseModel):
@@ -64,35 +100,26 @@ def create_assignment(
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
 
-    assignment = Assignment(
-        teacher_id=current_user.id,
-        student_id=str(student.id),
-        title=payload.title.strip(),
-        description=(payload.description or None),
-        due_at=payload.due_at,
-    )
-    db.add(assignment)
-    db.commit()
-    db.refresh(assignment)
-
     exercises_to_attach: list[Exercise] = []
 
     if payload.mode == "custom":
         if not payload.custom_exercises:
             raise HTTPException(status_code=400, detail="Provide at least one custom exercise")
         for ex in payload.custom_exercises:
+            content = (ex.content or "").strip()
+            if not content:
+                raise HTTPException(status_code=400, detail=f"{ex.type} content is required")
+            expected = _validate_expected_for_type(ex.type, ex.expected)
             new_ex = Exercise(
                 type=ex.type,
-                content=ex.content.strip(),
-                expected=ex.expected.strip().lower(),
+                content=content,
+                expected=expected,
                 target_words=[w.strip().lower() for w in (ex.target_words or []) if w.strip()],
                 difficulty=int(ex.difficulty or 1),
                 age_group="all",
                 source="teacher_assignment",
             )
-            db.add(new_ex)
             exercises_to_attach.append(new_ex)
-        db.commit()
     else:
         spec = payload.generate
         if not spec:
@@ -122,24 +149,56 @@ def create_assignment(
         )
         if not generated:
             raise HTTPException(status_code=502, detail="LLM generation failed (check GROQ_API_KEY)")
+
+        invalid_generated = 0
         for ex_data in generated:
+            ex_type = str(ex_data.get("type") or spec.type)
+            if ex_type != spec.type:
+                invalid_generated += 1
+                continue
+            content = str(ex_data.get("content") or "").strip()
+            if not content:
+                invalid_generated += 1
+                continue
+            try:
+                expected = _validate_expected_for_type(spec.type, str(ex_data.get("expected") or ""))
+            except HTTPException:
+                invalid_generated += 1
+                continue
             new_ex = Exercise(
-                type=ex_data["type"],
-                content=ex_data["content"],
-                expected=ex_data["expected"],
+                type=spec.type,
+                content=content,
+                expected=expected,
                 target_words=ex_data.get("target_words") or [],
                 difficulty=int(spec.difficulty or 1),
                 age_group="all",
                 source="ai_generated",
             )
-            db.add(new_ex)
             exercises_to_attach.append(new_ex)
-        db.commit()
+
+        if not exercises_to_attach:
+            detail = "LLM generation returned invalid exercises for the selected type. Please try again."
+            if invalid_generated:
+                detail += f" Filtered {invalid_generated} invalid item(s)."
+            raise HTTPException(status_code=400, detail=detail)
+
+    assignment = Assignment(
+        teacher_id=current_user.id,
+        student_id=str(student.id),
+        title=payload.title.strip(),
+        description=(payload.description or None),
+        due_at=payload.due_at,
+    )
+    db.add(assignment)
+    for ex in exercises_to_attach:
+        db.add(ex)
+    db.flush()
 
     # Attach mapping rows (preserve order)
     for idx, ex in enumerate(exercises_to_attach):
         db.add(AssignmentExercise(assignment_id=assignment.id, exercise_id=ex.id, position=idx))
     db.commit()
+    db.refresh(assignment)
 
     return {
         "id": assignment.id,

@@ -38,6 +38,23 @@ async function parseJson<T>(response: Response): Promise<T> {
   return (await response.json()) as T;
 }
 
+/** Same as parseJson but never triggers the 401/403 logout redirect.
+ *  Use for public endpoints like /signup and /login where 4xx is just a form error. */
+async function parseJsonPublic<T>(response: Response): Promise<T> {
+  if (!response.ok) {
+    const message = await response.text();
+    let detail = message;
+    try {
+      const obj = JSON.parse(message);
+      if (obj.detail) detail = typeof obj.detail === "string" ? obj.detail : JSON.stringify(obj.detail);
+    } catch {
+      /* use raw message */
+    }
+    throw new Error(detail || "Request failed");
+  }
+  return (await response.json()) as T;
+}
+
 function fetchWithAuth(url: string, init?: RequestInit): Promise<Response> {
   const headers = new Headers(init?.headers);
   Object.entries(authHeaders()).forEach(([k, v]) => headers.set(k, v));
@@ -57,8 +74,9 @@ export async function signup(payload: {
   email: string;
   password: string;
   role?: string;
+  teacher_code?: string;
 }): Promise<AuthResponse> {
-  return parseJson(
+  return parseJsonPublic(
     await fetch(`${API_BASE}/auth/signup`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -68,7 +86,7 @@ export async function signup(payload: {
 }
 
 export async function login(payload: { email: string; password: string }): Promise<AuthResponse> {
-  return parseJson(
+  return parseJsonPublic(
     await fetch(`${API_BASE}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
