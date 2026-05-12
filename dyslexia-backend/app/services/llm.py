@@ -146,6 +146,80 @@ def correct_ocr_text_with_image(*, rough_text: str, image_path: str) -> str:
         return rough
 
 
+def _is_single_line_handwriting_item(item: dict) -> bool:
+    """Allow only a single word or a single short sentence for handwriting exercises."""
+    content = str(item.get("content", "")).strip()
+    expected = str(item.get("expected", "")).strip()
+    if not content or not expected:
+        return False
+    if "\n" in content or "\n" in expected:
+        return False
+    if "Write this" not in content:
+        return False
+
+    # Reject paragraphs / multi-sentence outputs.
+    sentence_parts = [part.strip() for part in re.split(r"[.!?]+", expected) if part.strip()]
+    if len(sentence_parts) > 1:
+        return False
+
+    # Keep handwriting exercises short enough to fit on one line.
+    return len(expected.split()) <= 5
+
+
+def _is_single_line_handwriting_item(item: dict) -> bool:
+    """Return True only for one word or one short sentence handwriting prompts."""
+    content = str(item.get("content", "")).strip()
+    expected = str(item.get("expected", "")).strip()
+    if not content or not expected:
+        return False
+    if "\n" in content or "\n" in expected:
+        return False
+    if content.lower().count("write this") != 1:
+        return False
+    # expected text should be a single sentence or a single word, not a paragraph
+    sentence_pieces = [piece.strip() for piece in re.split(r"[.!?]+", expected) if piece.strip()]
+    if len(sentence_pieces) > 1:
+        return False
+    return len(expected.split()) <= 5 or len(expected.split()) == 1
+
+
+def transcribe_handwriting_image_with_image(image_bytes: bytes) -> str:
+    """
+    Use the vision LLM to transcribe exactly what is written in the image.
+    The result is used for display and grading.
+    """
+    if not image_bytes:
+        return ""
+
+    try:
+        base64_image = base64.b64encode(image_bytes).decode("utf-8")
+        prompt = (
+            "Transcribe exactly what is written in this handwriting image. "
+            "Do not correct spelling, grammar, or word choice. Return only the transcription text."
+        )
+        completion = _get_vision_client().chat.completions.create(
+            model=VISION_MODEL,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
+                        },
+                    ],
+                }
+            ],
+            temperature=0.0,
+            max_tokens=200,
+        )
+        return _sanitize_model_text(completion.choices[0].message.content or "")
+    except Exception as e:
+        print(f"Vision handwriting transcription failed: {e}")
+        return ""
+
+
 def generate_feedback(
     score: float,
     char_errors: list,
@@ -221,6 +295,101 @@ Rules:
             return "Good effort. Slow down and check each letter carefully. Try the same word again and improve your score."
         return "That was a tough one, and that's okay. Let’s practice slowly: say the word out loud, then write it letter by letter. Try again and aim for a higher score."
 
+def generate_handwriting_feedback_with_image(
+    image_bytes: bytes,
+    recognized_text: str,
+    expected_text: str,
+    score: float,
+    char_errors: list,
+    student_age: int
+) -> dict[str, str]:
+    """
+    For handwriting exercises: pass the image plus recognized and expected text to the LLM.
+    Returns:
+      - recognized_text: LLM transcription of the image
+      - feedback: exercise-specific feedback
+    """
+    if not image_bytes:
+        return {
+            "recognized_text": recognized_text,
+            "feedback": generate_feedback(score, char_errors, [], student_age, "handwriting"),
+        }
+    
+    try:
+        # Encode image for vision API
+        base64_image = base64.b64encode(image_bytes).decode("utf-8")
+        
+        # Prompt LLM to read image and provide specific feedback.
+        score_percent = round(score * 100)
+        
+        prompt = f"""You are a supportive teacher reviewing a child's handwriting exercise.
+
+EXPECTED TEXT: "{expected_text}"
+STUDENT'S RECOGNIZED TEXT: "{recognized_text}"
+SCORE: {score_percent}%
+
+Looking at the image of what the student wrote:
+    1. Transcribe exactly what the student wrote in the image. Do not correct it.
+    2. Write feedback that is specific to this exact exercise and compares what they wrote vs what was expected.
+
+    Return your response in exactly this format:
+    TRANSCRIPTION: [exact text you read from the image]
+    FEEDBACK: [specific feedback about mistakes vs expected]
+
+    Feedback must be:
+    - Specific to this exercise (mention actual mistakes they made)
+- Ignore capitalization, commas, periods, apostrophes, and other punctuation completely
+- Do not comment on uppercase vs lowercase; only judge whether the content is correct
+- Focus only on missing, extra, or wrong letters/words
+    - For a {student_age} year old (simple words)
+    - Encouraging but honest (if they got it wrong, explain what they did wrong and what was expected)
+    - 2-3 sentences maximum
+    - Never mention dyslexia"""
+
+        completion = _get_vision_client().chat.completions.create(
+            model=VISION_MODEL,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
+                        },
+                    ],
+                }
+            ],
+            temperature=0.2,
+            max_tokens=500,
+        )
+
+        response_text = (completion.choices[0].message.content or "").strip()
+        feedback = generate_feedback(score, char_errors, [], student_age, "handwriting")
+
+        if response_text:
+            transcription_marker = "TRANSCRIPTION:"
+            feedback_marker = "FEEDBACK:"
+            transcription_idx = response_text.find(transcription_marker)
+            feedback_idx = response_text.find(feedback_marker)
+
+            if transcription_idx != -1 and feedback_idx != -1 and feedback_idx > transcription_idx:
+                recognized_text = response_text[
+                    transcription_idx + len(transcription_marker):feedback_idx
+                ].strip()
+                feedback = response_text[feedback_idx + len(feedback_marker):].strip() or feedback
+
+        return {
+            "recognized_text": recognized_text,
+            "feedback": feedback,
+        }
+    
+    except Exception as e:
+        print(f"Image-based feedback generation failed: {e}")
+        return {
+            "recognized_text": recognized_text,
+            "feedback": generate_feedback(score, char_errors, [], student_age, "handwriting"),
+        }
 
 def generate_exercises(
     weak_words: list,
@@ -316,6 +485,8 @@ Example format:
         valid = []
         for ex in exercises:
             if all(k in ex for k in ["type", "content", "expected", "target_words"]):
+                if force_type == "handwriting" and not _is_single_line_handwriting_item(ex):
+                    continue
                 valid.append(ex)
         return valid
 

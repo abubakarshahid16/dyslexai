@@ -17,6 +17,7 @@ import StudentOcrStudioPage from "./pages/StudentOcrStudioPage";
 import { TermsPage } from "./pages/TermsPage";
 import { WorkspacePage } from "./pages/WorkspacePage";
 import { AssignmentsPage } from "./pages/AssignmentsPage";
+import { AssignmentStatusPage } from "./pages/AssignmentStatusPage";
 import { GameProvider } from "./features/game-mode/GameContext";
 import GameHomePage from "./features/game-mode/pages/GameHomePage";
 import GameSessionPage from "./features/game-mode/pages/GameSessionPage";
@@ -36,6 +37,7 @@ const teacherNavItems: Array<{ to: string; label: string; icon: KidIconName }> =
   { to: "/dashboard", label: "Dashboard", icon: "chart" },
   { to: "/workspace", label: "OCR Studio", icon: "camera" },
   { to: "/assignments", label: "Assignments", icon: "clipboard" },
+  { to: "/assignment-status", label: "Assignment Status", icon: "check" },
   { to: "/students", label: "Students", icon: "users" },
   { to: "/settings", label: "Settings", icon: "settings" },
 ];
@@ -91,6 +93,7 @@ function AppLayout() {
               <Route path="/ocr-studio" element={<StudentOcrStudioPage />} />
               <Route path="/workspace" element={<WorkspacePage />} />
               <Route path="/assignments" element={<AssignmentsPage />} />
+              <Route path="/assignment-status" element={<AssignmentStatusPage />} />
               <Route path="/students" element={<StudentPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/about" element={<AboutPage />} />

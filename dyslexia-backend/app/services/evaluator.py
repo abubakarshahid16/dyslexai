@@ -1,5 +1,6 @@
 import Levenshtein
 import re
+from difflib import SequenceMatcher
 
 def normalize(text: str) -> str:
     """Lowercase, remove punctuation, strip extra spaces."""
@@ -64,6 +65,24 @@ def compute_phonetic_score(expected: str, actual: str) -> float:
 
     return round(total / len(exp_words), 3)
 
+def compute_handwriting_score(expected: str, actual: str) -> float:
+    """
+    Score handwriting by the number of characters that match in the right position.
+    This is stricter than phonetic similarity but fairer than raw edit distance for
+    short handwriting answers.
+    """
+    exp = expected.strip()
+    act = actual.strip()
+    if not exp and not act:
+        return 1.0
+    if not exp or not act:
+        return 0.0
+
+    matcher = SequenceMatcher(None, exp, act)
+    matched = sum(i2 - i1 for tag, i1, i2, j1, j2 in matcher.get_opcodes() if tag == "equal")
+    denominator = max(len(exp), len(act), 1)
+    return round(matched / denominator, 3)
+
 def evaluate_response(
     expected:       str,
     actual:         str,
@@ -74,31 +93,22 @@ def evaluate_response(
     Main evaluation function.
     Returns score, char_errors, phonetic_score.
     """
-    # For handwriting with low OCR confidence, be more lenient
-    confidence_threshold = 0.75
-    if is_handwriting and ocr_confidence and ocr_confidence < confidence_threshold:
-        # give partial benefit of the doubt — use phonetic score as main signal
-        phonetic = compute_phonetic_score(normalize(expected), normalize(actual))
-        return {
-            "score":         round(phonetic * 0.9, 3),  # slight penalty for uncertainty
-            "char_errors":   [],
-            "phonetic_score": phonetic,
-            "note":          "Low OCR confidence — scored on phonetic similarity"
-        }
-
     exp_norm = normalize(expected)
     act_norm = normalize(actual)
 
-    # character-level score
-    dist    = Levenshtein.distance(exp_norm, act_norm)
-    max_len = max(len(exp_norm), len(act_norm), 1)
-    score   = round(1.0 - (dist / max_len), 3)
+    # handwriting gets a position-based character score; typing keeps edit-distance scoring
+    if is_handwriting:
+        score = compute_handwriting_score(exp_norm, act_norm)
+    else:
+        dist    = Levenshtein.distance(exp_norm, act_norm)
+        max_len = max(len(exp_norm), len(act_norm), 1)
+        score   = round(1.0 - (dist / max_len), 3)
 
     char_errors   = get_char_errors(exp_norm, act_norm)
     phonetic_score = compute_phonetic_score(exp_norm, act_norm)
 
-    # if phonetically correct but spelled wrong, boost score slightly
-    if phonetic_score > 0.85 and score < phonetic_score:
+    # typing can get a small phonetic boost; handwriting stays character-position based
+    if not is_handwriting and phonetic_score > 0.85 and score < phonetic_score:
         score = round((score + phonetic_score) / 2, 3)
 
     return {

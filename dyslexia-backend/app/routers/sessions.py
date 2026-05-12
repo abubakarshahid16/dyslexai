@@ -13,7 +13,11 @@ from app.models.word_mastery import WordMastery
 from app.schemas.session import SessionCreate, SessionSubmit, SubmitResponse, HandwritingSubmitResponse, TracingSubmit, TracingSubmitResponse
 from app.services.evaluator import evaluate_response
 import uuid
-from app.services.llm import generate_feedback as llm_feedback
+from app.services.llm import (
+    generate_feedback as llm_feedback,
+    generate_handwriting_feedback_with_image,
+    transcribe_handwriting_image_with_image,
+)
 from app.models.exercise import Exercise as ExerciseModel
 from app.services.ocr_service import process_handwriting_image
 
@@ -237,7 +241,7 @@ async def submit_handwriting(
     if session.score is not None:
         raise HTTPException(status_code=400, detail="Session already submitted")
 
-    # ── Run OCR (notebook pipeline: DocTR + TrOCR notebook_parity + correction) ──
+    # ── Run OCR (TrOCR Large for raw recognition) ──
     image_bytes = await file.read()
     try:
         ocr_result = process_handwriting_image(image_bytes)
@@ -248,30 +252,29 @@ async def submit_handwriting(
             status_code=500,
             detail=f"Handwriting OCR failed: {str(e)}"
         )
-    # For adaptive handwritten exercises, we only want to recognize
-    # what the student wrote. "Corrected" text should not be returned
-    # because it would not reflect the student's original writing.
-    ocr_text       = ocr_result.get("recognized_text") or ocr_result.get("corrected_text") or ""
-    ocr_confidence = ocr_result["confidence"]
-    recognized_text = ocr_result.get("recognized_text", ocr_text)
-
-    if not ocr_text.strip():
+    raw_ocr_text = ocr_result.get("recognized_text") or ""
+    if not raw_ocr_text.strip():
         raise HTTPException(
             status_code=422,
             detail="OCR could not extract any text from the image. "
                    "Please retake the photo with better lighting and clearer writing."
         )
 
-    # ── 1. Evaluate (same function as typing) ────────────────────────
+    # Use the vision LLM transcription for the text shown to the user and the score.
+    llm_recognized_text = transcribe_handwriting_image_with_image(image_bytes)
+    recognized_text = llm_recognized_text.strip() or raw_ocr_text
+    ocr_confidence = 1.0 if llm_recognized_text.strip() else ocr_result["confidence"]
+
+    # ── 1. Evaluate against the LLM transcription (what the student wrote) ────
     result = evaluate_response(
         expected       = session.expected,
-        actual         = ocr_text,
+        actual         = recognized_text,
         is_handwriting = True,
         ocr_confidence = ocr_confidence
     )
 
     # ── 2. Save session result ───────────────────────────────────────
-    session.student_response = ocr_text
+    session.student_response = recognized_text
     session.submitted_at     = datetime.now(timezone.utc)
     session.duration_seconds = duration_seconds
     session.score            = result["score"]
@@ -296,15 +299,19 @@ async def submit_handwriting(
     # ── 5. Adjust difficulty ─────────────────────────────────────────
     new_level = update_difficulty(db, student)
 
-    # ── 6. LLM feedback ─────────────────────────────────────────────
+    # ── 6. LLM feedback with image analysis ─────────────────────────
+    # For handwriting: pass image to LLM to read and provide specific feedback.
     age = student.age or 10
-    feedback = llm_feedback(
-        score         = result["score"],
-        char_errors   = result["char_errors"],
-        target_words  = target_words,
-        student_age   = age,
-        exercise_type = "handwriting"
+    feedback_result = generate_handwriting_feedback_with_image(
+        image_bytes      = image_bytes,
+        recognized_text  = recognized_text,
+        expected_text    = session.expected,
+        score            = result["score"],
+        char_errors      = result["char_errors"],
+        student_age      = age
     )
+    recognized_text  = feedback_result["recognized_text"]
+    feedback         = feedback_result["feedback"]
     session.feedback = feedback
     db.commit()
 
@@ -316,9 +323,9 @@ async def submit_handwriting(
         feedback             = feedback,
         new_difficulty_level = new_level,
         words_updated        = target_words,
+        recognized_text      = recognized_text,
         ocr_text             = recognized_text,
         ocr_confidence       = ocr_confidence,
-        corrected_text       = None,
     )
 
 

@@ -42,9 +42,9 @@ class SubmitResponse(BaseModel):
 
 class HandwritingSubmitResponse(SubmitResponse):
     """Same as SubmitResponse but includes OCR output."""
+    recognized_text: str
     ocr_text: str
     ocr_confidence: float
-    corrected_text: Optional[str] = None
 
 
 class StrokeError(BaseModel):

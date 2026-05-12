@@ -117,6 +117,16 @@ def weighted_choice(pools: list):
     return random.choice(non_empty[-1][0])
 
 
+def is_short_handwriting_item(ex: Exercise) -> bool:
+    """Handwriting exercises must fit on one line: one short sentence or one word."""
+    if ex.type != "handwriting":
+        return True
+    text = (ex.expected or "").strip()
+    if not text or "\n" in text:
+        return False
+    return len(text.split()) <= 5
+
+
 @router.get("/next", response_model=ExerciseResponse)
 def get_next_exercise(
     student_id: uuid.UUID,
@@ -140,6 +150,7 @@ def get_next_exercise(
 
     all_at_level   = base_query.all()
     fresh_at_level = [e for e in all_at_level if e.id not in recent_ids]
+    fresh_at_level = [e for e in fresh_at_level if is_short_handwriting_item(e)]
 
     # Foundation mode for the first few sessions:
     # pick exercises that target common dyslexic confusions so the child starts strong.
@@ -255,6 +266,43 @@ def get_next_exercise(
     # fallback — if all pools empty just return anything at level
     if not chosen:
         chosen = random.choice(all_at_level) if all_at_level else None
+
+    # fallback — if type was requested but no exercises found at student's level,
+    # return ANY pre-stored exercise of that type (any difficulty) so kids always have content
+    if not chosen and type:
+        any_type_exercises = [
+            e for e in db.query(Exercise).filter(Exercise.type == type).all()
+            if e.id not in recent_ids and is_short_handwriting_item(e)
+        ]
+        if any_type_exercises:
+            chosen = random.choice(any_type_exercises)
+
+    # final fallback — if still nothing, generate exercises with LLM
+    # for the requested type so the student always has something to start with
+    if not chosen and type:
+        # use weak words if available, otherwise generate generic exercises for this type
+        words_to_use = list(weak_words) if weak_words else ["cat", "dog", "run", "jump", "play"]
+        generated = llm_generate(
+            weak_words  = words_to_use,
+            difficulty  = level,
+            student_age = student.age or 10,
+            count       = 3,
+            force_type  = type
+        )
+        for ex_data in generated:
+            new_ex = Exercise(
+                type         = ex_data["type"],
+                content      = ex_data["content"],
+                expected     = ex_data["expected"],
+                target_words = ex_data["target_words"],
+                difficulty   = level,
+                age_group    = "all",
+                source       = "ai_generated"
+            )
+            db.add(new_ex)
+        if generated:
+            db.commit()
+            chosen = new_ex  # return the last generated exercise
 
     if not chosen:
         raise HTTPException(status_code=404, detail="No exercises found for this student")

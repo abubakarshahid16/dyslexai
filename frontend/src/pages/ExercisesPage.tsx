@@ -347,8 +347,7 @@ export function ExercisesPage() {
         <>
           {"ocr_text" in result ? (
             <HandwritingSessionResult
-              recognizedText={result.ocr_text}
-              correctedText={result.corrected_text}
+              recognizedText={result.recognized_text}
               score={result.score}
               feedback={result.feedback}
             />

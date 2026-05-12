@@ -80,9 +80,9 @@ export type HandwritingSubmitResponse = {
   session_id: string;
   score: number;
   feedback: string;
+  recognized_text: string;
   ocr_text: string;
   ocr_confidence: number;
-  corrected_text?: string;
   char_errors?: unknown[];
   phonetic_score?: number;
   new_difficulty_level: number;

@@ -1,10 +1,11 @@
 """
 OCR service for the adaptive *exercise* handwriting type.
 
-Requirement:
+Strategy:
+- Raw OCR output (recognized_text): used for SCORING — reflects what student actually wrote
+- Corrected text (corrected_text): used for FEEDBACK — helps student see corrections
 - Use ONLY TrOCR Large handwritten for recognition (no DocTR segmentation).
 - Convert the uploaded image to grayscale before feeding it to TrOCR.
-- No ByT5/LLM correction in this exercise path.
 
 The full OCR Studio still uses `/api/ocr/process` which runs the notebook pipeline.
 """
@@ -17,6 +18,7 @@ from typing import Any
 from PIL import Image
 
 from app.core.config import get_settings
+from app.services.llm import correct_ocr_text
 
 _simple_processor: TrOCRProcessor | None = None
 _simple_model: VisionEncoderDecoderModel | None = None
@@ -58,10 +60,13 @@ def warmup_simple_trocr() -> None:
 def process_handwriting_image(image_bytes: bytes) -> dict[str, Any]:
     """
     Recognize handwriting text with simple TrOCR-large only.
+    
+    IMPORTANT: Scoring is based on RAW OCR output (what student actually wrote),
+    not corrected/auto-fixed versions. This ensures fair assessment of handwriting.
 
     Returns dict keys:
-      - recognized_text
-      - corrected_text (same as recognized_text in this exercise mode)
+      - recognized_text (RAW TrOCR output — used for scoring)
+      - corrected_text (spell-corrected version for display feedback only)
       - confidence (0–1)
     """
     processor, model, device = _get_simple_trocr()
@@ -86,11 +91,31 @@ def process_handwriting_image(image_bytes: bytes) -> dict[str, Any]:
             early_stopping=True,
         )
 
-    text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
-    confidence = 1.0 if text else 0.0
+    raw_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
+    confidence = 1.0 if raw_text else 0.0
+
+    # Get spell-corrected version for display feedback (not scoring)
+    corrected = _spell_correct_text(raw_text)
 
     return {
-        "recognized_text": text,
-        "corrected_text": text,
+        "recognized_text": raw_text,      # Use this for scoring
+        "corrected_text": corrected,       # Use this for feedback display
         "confidence": confidence,
     }
+
+
+def _spell_correct_text(text: str) -> str:
+    """
+    Apply spell correction to OCR output for display feedback.
+    Uses LLM to correct spelling while preserving meaning.
+    This corrected version is shown to students for feedback, not used for scoring.
+    """
+    if not text or not text.strip():
+        return text
+    
+    try:
+        return correct_ocr_text(text)
+    except Exception as e:
+        # If correction fails, return original text
+        print(f"Spell correction failed: {e}")
+        return text
