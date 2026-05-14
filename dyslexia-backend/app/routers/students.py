@@ -285,14 +285,19 @@ def get_stats(
     )[:5]
 
     # exercise type breakdown
+    from app.models.exercise import Exercise
+    session_exercises = (
+        db.query(SessionModel.score, Exercise.type)
+        .join(Exercise, SessionModel.exercise_id == Exercise.id)
+        .filter(SessionModel.student_id == sid, SessionModel.score.isnot(None))
+        .all()
+    )
+    
     type_scores = {}
-    for s in sessions:
-        from app.models.exercise import Exercise
-        ex = db.query(Exercise).filter(Exercise.id == s.exercise_id).first()
-        if ex:
-            if ex.type not in type_scores:
-                type_scores[ex.type] = []
-            type_scores[ex.type].append(s.score)
+    for score, ex_type in session_exercises:
+        if ex_type not in type_scores:
+            type_scores[ex_type] = []
+        type_scores[ex_type].append(score)
 
     type_accuracy = {
         t: round(sum(scores) / len(scores), 3)
