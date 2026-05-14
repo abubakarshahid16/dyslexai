@@ -388,13 +388,45 @@ def submit_tracing(
 
     # ── 5. LLM feedback ─────────────────────────────────────────────
     age = student.age or 10
-    feedback = llm_feedback(
-        score         = trace_score,
-        char_errors   = stroke_errors,
-        target_words  = target_words,
-        student_age   = age,
-        exercise_type = "tracing"
-    )
+    feedback = ""
+    
+    if data.image_base64:
+        import base64
+        try:
+            # Format is usually 'data:image/png;base64,...'
+            b64_str = data.image_base64
+            if "," in b64_str:
+                b64_str = b64_str.split(",", 1)[1]
+            image_bytes = base64.b64decode(b64_str)
+            from app.services._internal import validate_tracing_with_vision
+            result = validate_tracing_with_vision(
+                image_bytes=image_bytes,
+                expected_text=session.expected,
+                student_age=age,
+                frontend_score=trace_score
+            )
+            trace_score = result["score"]
+            session.score = trace_score # Update session score based on LLM validation
+            session.phonetic_score = trace_score
+            feedback = result["feedback"]
+        except Exception as e:
+            print(f"Tracing validation failed: {e}")
+            feedback = llm_feedback(
+                score         = trace_score,
+                char_errors   = stroke_errors,
+                target_words  = target_words,
+                student_age   = age,
+                exercise_type = "tracing"
+            )
+    else:
+        feedback = llm_feedback(
+            score         = trace_score,
+            char_errors   = stroke_errors,
+            target_words  = target_words,
+            student_age   = age,
+            exercise_type = "tracing"
+        )
+        
     session.feedback = feedback
     db.commit()
 

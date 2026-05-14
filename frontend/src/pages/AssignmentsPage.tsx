@@ -486,7 +486,7 @@ function StudentAssignments() {
     }
   }
 
-  async function submitTracingForExercise(ex: AssignmentDetailExercise, traceScore: number, durationSeconds: number, strokeErrors?: any[]) {
+  async function submitTracingForExercise(ex: AssignmentDetailExercise, traceScore: number, durationSeconds: number, strokeErrors?: any[], imageBase64?: string) {
     if (!studentId || !selected) return;
     setBusy(true);
     setError(null);
@@ -500,7 +500,8 @@ function StudentAssignments() {
       const res = await submitTracing(sess.session_id, {
         trace_score: traceScore,
         duration_seconds: durationSeconds,
-        stroke_errors: strokeErrors
+        stroke_errors: strokeErrors,
+        image_base64: imageBase64
       });
       setResult(res);
       setRunResults((p) => [...p, { exerciseId: ex.id, score: res.score, feedback: res.feedback, studentResponse: ex.expected }]);
@@ -629,8 +630,8 @@ function StudentAssignments() {
             <TracingCanvas
               expected={currentExercise.expected}
               disabled={busy}
-              onComplete={(traceScore, durationSeconds, strokeErrors) =>
-                submitTracingForExercise(currentExercise, traceScore, durationSeconds, strokeErrors as any)
+              onComplete={(traceScore, durationSeconds, strokeErrors, imageBase64) =>
+                submitTracingForExercise(currentExercise, traceScore, durationSeconds, strokeErrors as any, imageBase64)
               }
             />
           )}

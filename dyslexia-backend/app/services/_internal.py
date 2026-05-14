@@ -216,3 +216,75 @@ Looking at the image of what the student wrote:
             "recognized_text": recognized_text,
             "feedback": generate_feedback(score, char_errors, [], student_age, "handwriting"),
         }
+
+
+def validate_tracing_with_vision(image_bytes: bytes, expected_text: str, student_age: int, frontend_score: float) -> dict:
+    try:
+        from app.services.llm import generate_feedback
+    except Exception:
+        generate_feedback = lambda *a, **k: ""
+        
+    if not image_bytes:
+        return {
+            "score": frontend_score,
+            "feedback": generate_feedback(frontend_score, [], [], student_age, "tracing")
+        }
+
+    try:
+        base64_image = base64.b64encode(image_bytes).decode("utf-8")
+        prompt = f"""You are a supportive teacher evaluating a tracing exercise for a {student_age} year old.
+The student was supposed to trace the word: "{expected_text}"
+Look at the provided image. The dark background contains the faint gray guide text, and the bright blue lines are what the student drew.
+Did the student trace the word correctly, or did they just scribble gibberish?
+
+Return your response in exactly this format:
+VALID: [YES or NO]
+FEEDBACK: [1-2 sentences of encouraging feedback. If NO, explain that they need to trace the letters carefully.]"""
+
+        completion = _get_vision_client().chat.completions.create(
+            model=VISION_MODEL,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
+                        },
+                    ],
+                }
+            ],
+            temperature=0.1,
+            max_tokens=200,
+        )
+        
+        response_text = (completion.choices[0].message.content or "").strip()
+        
+        valid_marker = "VALID:"
+        feedback_marker = "FEEDBACK:"
+        
+        score = frontend_score
+        feedback = generate_feedback(frontend_score, [], [], student_age, "tracing")
+        
+        valid_idx = response_text.find(valid_marker)
+        feedback_idx = response_text.find(feedback_marker)
+        
+        if valid_idx != -1 and feedback_idx != -1 and feedback_idx > valid_idx:
+            valid_val = response_text[valid_idx + len(valid_marker):feedback_idx].strip().upper()
+            if "YES" in valid_val:
+                score = max(0.85, frontend_score)
+            elif "NO" in valid_val:
+                score = min(0.20, frontend_score)
+            feedback = response_text[feedback_idx + len(feedback_marker):].strip()
+            
+        return {
+            "score": score,
+            "feedback": feedback
+        }
+    except Exception as e:
+        print(f"Vision tracing validation failed: {e}")
+        return {
+            "score": frontend_score,
+            "feedback": generate_feedback(frontend_score, [], [], student_age, "tracing")
+        }
