@@ -1,111 +1,88 @@
-# DyslexAI
+# 🌐 DyslexAI Web: Comprehensive Dyslexia Support Ecosystem
 
-DyslexAI is a full-stack learning platform for dyslexic learners with OCR-assisted handwriting workflows, adaptive exercises, teacher assignments, and a daily game curriculum.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
 
-## Tech Stack
+**DyslexAI Web** is a professional, web-based educational platform designed to support students with dyslexia and provide teachers with powerful AI-driven assessment tools. It brings the power of the DyslexAI handwriting engine to the browser, enabling accessible education for everyone, everywhere.
 
-- Frontend: React + TypeScript + Vite
-- Backend: FastAPI + SQLAlchemy
-- Auth: Supabase Auth with local user mapping
-- Database: SQLite (local) or PostgreSQL (Supabase)
-- OCR pipeline: DocTR + TrOCR + correction layers + optional Groq vision cross-check
+---
 
-## Repository Layout
+## 🌟 Visual Experience
 
-- frontend: React web app
-- dyslexia-backend: FastAPI API and OCR pipeline
-- seed_data_90_days.html: 90-day game curriculum seed source
+![DyslexAI Web Hero](docs/assets/hero.png)
 
-## Current Features
+### 🎥 Live Demo Walkthrough
+[![Watch the Demo](docs/assets/hero.png)](https://github.com/abubakarshahid16/dyslexai/raw/main/docs/assets/demo.mp4)
 
-- Supabase-backed authentication (signup, login, session validation, logout)
-- Student and teacher roles with teacher access code gating
-- Adaptive exercise engine (typing, sentence typing, handwriting, tracing)
-- Assignment flows for teacher-created and LLM-generated exercises
-- OCR Studio for handwriting image upload, correction, and run history
-- Daily Exercises game mode seeded from the 90-day curriculum file
+*Click the image above to watch the full system demonstration.*
 
-## Prerequisites
+---
 
-- Python 3.10+
-- Node.js 18+
-- npm 9+
+## 🚀 World-Class Features
 
-## Environment Setup
+### 🖋️ Handwriting Analysis Portal
+Upload or capture student handwriting directly through the web interface. Our backend AI (TrOCR Large) analyzes the input and identifies phonetic errors, reversals (b/d, p/q), and spelling patterns common in dyslexia.
 
-1. Copy .env.example values into dyslexia-backend/.env.
-2. Add real values for Supabase and Groq keys.
-3. Optional frontend env overrides can be set in frontend/.env.
+### 🏫 Teacher Dashboard
+A centralized hub for classroom management.
+*   **Student Progress:** Monitor real-time stats for entire cohorts.
+*   **Assignment Builder:** Use AI to generate custom reading and writing assignments.
+*   **Mastery Tracking:** Visualize word-level mastery trends over time.
 
-Important: Do not commit secrets. Keep real keys only in local .env files.
+### 🎮 Gamified Learning
+Complete the 90-day adaptive curriculum. The web app synchronizes with the mobile platform to ensure a seamless "learning anywhere" experience.
 
-## Backend Setup
+---
 
-```bash
-cd dyslexia-backend
-python3 -m venv ../.venv
-source ../.venv/bin/activate
-pip install -r requirements.txt
-```
+## 🏗️ Technical Architecture
 
-Start API:
+*   **Frontend:** Modern React + TypeScript powered by **Vite** for lightning-fast performance and a premium UI.
+*   **Backend:** High-performance **FastAPI** service handling authentication, gamification logic, and database management.
+*   **AI Engine:** Integrated OCR and NLP pipelines for handwriting correction and phonetic analysis.
+*   **Database:** Scalable architecture supporting both SQLite for local development and PostgreSQL for production.
 
-```bash
-uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
-```
+---
 
-Notes:
-- On startup, tables are created from SQLAlchemy models.
-- If game curriculum is empty, it auto-seeds from seed_data_90_days.html.
-- For SQLite, startup also runs incremental migration scripts in scripts/.
+## 🛠️ Installation & Setup
 
-## Frontend Setup
+### Prerequisites
+*   Node.js v18+
+*   Python 3.10+
+*   PostgreSQL or SQLite
 
-```bash
-cd frontend
-npm install
-npm run dev -- --host 127.0.0.1 --port 5173
-```
+### Steps to Run
 
-Open http://127.0.0.1:5173
+1.  **Backend Setup:**
+    ```bash
+    cd dyslexia-backend
+    pip install -r requirements.txt
+    uvicorn app.main:app --port 8000
+    ```
 
-## Core API Areas
+2.  **Frontend Setup:**
+    ```bash
+    cd frontend
+    npm install
+    npm run dev
+    ```
 
-- Auth: /api/auth/*
-- Students: /api/students/*
-- Exercises: /api/exercises/*
-- Sessions: /api/sessions/*
-- OCR: /api/ocr/*
-- Dashboard: /api/dashboard/*
-- Assignments: /assignments/*
-- Game mode: /api/game/*
+---
 
-## Data and Runtime Notes
+## 📈 Roadmap
+- [x] Full Student/Teacher Portal synchronization
+- [x] Real-time handwriting OCR analysis
+- [x] 90-Day adaptive curriculum integration
+- [ ] Direct Browser Canvas support for handwriting exercises
+- [ ] Accessibility-focused UI themes (Dyslexie font support)
 
-- OCR artifacts and uploads are stored under dyslexia-backend/data.
-- First OCR run may be slower due to model loading.
-- Groq-dependent features require GROQ_API_KEY.
-- Supabase auth flow requires SUPABASE_URL and SUPABASE_ANON_KEY.
-- Legacy local users can be migrated during login when SUPABASE_SERVICE_ROLE_KEY is set.
+---
 
-## Useful Commands
+## 🤝 Contributing
+Join us in making education accessible to all! Open an issue or submit a pull request.
 
-Seed adaptive exercises manually:
+## 📄 License
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-```bash
-cd dyslexia-backend
-source ../.venv/bin/activate
-python db/seed.py
-```
-
-Run OCR history cleanup migration (optional):
-
-```bash
-cd dyslexia-backend
-source ../.venv/bin/activate
-python scripts/migrate_drop_raw_text_and_clear_ocr_history.py
-```
-
-## License
-
-This project currently has no explicit license file in the repository.
+---
+Created with ❤️ by **Abubakar Shahid**
