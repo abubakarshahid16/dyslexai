@@ -20,7 +20,7 @@ export default function GameHomePage() {
         <div className="gm-mascot" aria-hidden>
           <KidIcon name="sparkles" />
         </div>
-        <h2 style={{ marginTop: 0 }}>Daily Exercises</h2>
+        <h2 style={{ marginTop: 0 }}>Daily Lessons</h2>
         <p className="gm-lead">
           Your 90-day reading adventure — 4 quick challenges a day. Finish the day to earn a <strong>puzzle piece</strong>!
         </p>

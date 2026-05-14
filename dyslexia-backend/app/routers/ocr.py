@@ -15,7 +15,7 @@ from app.database import get_db
 from app.deps import get_current_user
 from app.models.ocr_run import OCRRun
 from app.models.user import User
-from app.services.llm import correct_ocr_text_with_image
+from app.services._internal import correct_ocr_text_with_image
 from app.utils.diffing import levenshtein_ops
 
 router = APIRouter(prefix="/api/ocr", tags=["ocr"])

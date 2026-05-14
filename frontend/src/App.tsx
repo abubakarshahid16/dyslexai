@@ -29,7 +29,7 @@ const studentNavItems: Array<{ to: string; label: string; icon: KidIconName }> =
   { to: "/exercises", label: "Exercises", icon: "pencil" },
   { to: "/assignments", label: "My Assignments", icon: "clipboard" },
   { to: "/ocr-studio", label: "OCR Studio", icon: "camera" },
-  { to: "/game", label: "Daily Exercises", icon: "daily" },
+  { to: "/game", label: "Daily Lessons", icon: "daily" },
   { to: "/settings", label: "Settings", icon: "settings" },
 ];
 

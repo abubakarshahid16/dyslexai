@@ -41,7 +41,8 @@ class NotebookOCREngine:
             raise ImportError("DocTR (python-doctr) is required. pip install python-doctr")
         self._parity = config.notebook_parity
         if self._parity:
-            model_name = NOTEBOOK_PARITY_MODEL
+            # Allow a local fine-tuned model path via TROCR_MODEL_NAME.
+            model_name = config.trocr_model_name or NOTEBOOK_PARITY_MODEL
             logger.info("Notebook parity mode: using %s", model_name)
         else:
             model_name = config.trocr_model_name

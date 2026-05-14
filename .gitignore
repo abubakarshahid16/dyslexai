@@ -28,3 +28,9 @@ Thumbs.db
 dyslexia-backend/data/artifacts/
 dyslexia-backend/data/uploads/
 dyslexia-backend/data/model_cache/
+
+# Large ML model files — stored on HuggingFace Hub instead
+dyslexia-backend/app/finetuned_model/
+
+# Large generated data files
+seed_data_90_days.html

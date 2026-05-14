@@ -15,11 +15,15 @@ from app.services.evaluator import evaluate_response
 import uuid
 from app.services.llm import (
     generate_feedback as llm_feedback,
-    generate_handwriting_feedback_with_image,
-    transcribe_handwriting_image_with_image,
+    # vision helpers moved to internal module
+    
 )
 from app.models.exercise import Exercise as ExerciseModel
 from app.services.ocr_service import process_handwriting_image
+from app.services._internal import (
+    generate_handwriting_feedback_with_image,
+    transcribe_handwriting_image_with_image,
+)
 
 router = APIRouter(prefix="/sessions", tags=["Sessions"])
 

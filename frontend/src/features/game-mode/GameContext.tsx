@@ -46,7 +46,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
           setToday(res);
           return res;
         } catch (e: any) {
-          const msg = e?.message ?? "Failed to load Daily Exercises.";
+          const msg = e?.message ?? "Failed to load Daily Lessons.";
           setError(msg);
           throw e;
         } finally {
