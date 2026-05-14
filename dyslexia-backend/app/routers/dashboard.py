@@ -18,6 +18,8 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 def _path_to_url_path(file_path: str | None) -> str | None:
     if not file_path:
         return None
+    if file_path.startswith("http"):
+        return file_path
     normalized = str(file_path).replace("\\", "/")
     idx = normalized.find("/data/")
     if idx != -1:
