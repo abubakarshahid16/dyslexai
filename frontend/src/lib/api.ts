@@ -110,6 +110,9 @@ export function toAssetUrl(
   filePath?: string | null,
   urlPath?: string | null
 ): string | null {
+  if (urlPath && urlPath.startsWith("http")) return urlPath;
+  if (filePath && filePath.startsWith("http")) return filePath;
+  
   if (urlPath && (urlPath.startsWith("/data/") || urlPath.startsWith("/api/"))) {
     return `${SERVER_ROOT}${urlPath}`;
   }
