@@ -234,12 +234,15 @@ def validate_tracing_with_vision(image_bytes: bytes, expected_text: str, student
         base64_image = base64.b64encode(image_bytes).decode("utf-8")
         prompt = f"""You are a supportive teacher evaluating a tracing exercise for a {student_age} year old.
 The student was supposed to trace the word: "{expected_text}"
-Look at the provided image. The dark background contains the faint gray guide text, and the bright blue lines are what the student drew.
-Did the student trace the word correctly, or did they just scribble gibberish?
+Look at the provided image. The dark background contains faint gray guide text, and the bright blue lines are what the student drew.
+You must check TWO things:
+1. Did the student actually write the expected word/letter? (Or did they just scribble gibberish?)
+2. Is the blue writing directly ON TOP of the faint gray guide text? (Or did they write it somewhere else on the canvas?)
 
 Return your response in exactly this format:
-VALID: [YES or NO]
-FEEDBACK: [1-2 sentences of encouraging feedback. If NO, explain that they need to trace the letters carefully.]"""
+WROTE_EXPECTED: [YES or NO]
+ON_TRACE: [YES or NO]
+FEEDBACK: [1-2 sentences of encouraging feedback. If they didn't write it, tell them to write carefully. If they wrote it but not on the trace, tell them to write ON the gray letters.]"""
 
         completion = _get_vision_client().chat.completions.create(
             model=VISION_MODEL,
@@ -261,21 +264,31 @@ FEEDBACK: [1-2 sentences of encouraging feedback. If NO, explain that they need 
         
         response_text = (completion.choices[0].message.content or "").strip()
         
-        valid_marker = "VALID:"
+        wrote_marker = "WROTE_EXPECTED:"
+        on_trace_marker = "ON_TRACE:"
         feedback_marker = "FEEDBACK:"
         
         score = frontend_score
         feedback = generate_feedback(frontend_score, [], [], student_age, "tracing")
         
-        valid_idx = response_text.find(valid_marker)
+        wrote_idx = response_text.find(wrote_marker)
+        on_trace_idx = response_text.find(on_trace_marker)
         feedback_idx = response_text.find(feedback_marker)
         
-        if valid_idx != -1 and feedback_idx != -1 and feedback_idx > valid_idx:
-            valid_val = response_text[valid_idx + len(valid_marker):feedback_idx].strip().upper()
-            if "YES" in valid_val:
+        if wrote_idx != -1 and on_trace_idx != -1 and feedback_idx != -1:
+            wrote_val = response_text[wrote_idx + len(wrote_marker):on_trace_idx].strip().upper()
+            on_trace_val = response_text[on_trace_idx + len(on_trace_marker):feedback_idx].strip().upper()
+            
+            wrote_yes = "YES" in wrote_val
+            on_trace_yes = "YES" in on_trace_val
+            
+            if wrote_yes and on_trace_yes:
                 score = max(0.85, frontend_score)
-            elif "NO" in valid_val:
-                score = min(0.20, frontend_score)
+            elif wrote_yes and not on_trace_yes:
+                score = 0.50  # Wrote it, but not on trace
+            else:
+                score = min(0.20, frontend_score) # Gibberish or wrong word
+                
             feedback = response_text[feedback_idx + len(feedback_marker):].strip()
             
         return {
