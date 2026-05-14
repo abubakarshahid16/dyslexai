@@ -1,0 +1,11 @@
+[build]
+  # Tell Netlify to treat the "frontend" folder as the root of the app
+  base = "frontend"
+  command = "npm install && npm run build"
+  publish = "dist"
+
+# Required for React Router
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
