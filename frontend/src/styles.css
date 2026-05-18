@@ -2881,3 +2881,101 @@ body.contrast-high {
     animation: none !important;
   }
 }
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .sidebar {
+    padding: 16px;
+    border-right: none;
+    border-bottom: 1px solid var(--color-border);
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  
+  .brand {
+    margin-bottom: 0;
+  }
+  
+  .nav-list {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+    padding-bottom: 8px;
+    gap: 8px;
+  }
+  
+  .nav-link {
+    white-space: nowrap;
+    padding: 8px 12px;
+  }
+  
+  .sidebar-footer {
+    display: none;
+  }
+  
+  .main-content {
+    padding: 16px;
+  }
+
+  .assignments-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .form-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .form-row button:not(.btn-type) {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .hero {
+    padding: 24px 16px;
+  }
+  
+  .hero h1 {
+    font-size: 24px;
+  }
+  
+  .as-player-card {
+    padding: 16px;
+  }
+
+  .crop-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* Prevent cards with tables from expanding page width */
+  .page-stack {
+    min-width: 0;
+  }
+  
+  .card, .hero {
+    max-width: 100vw;
+    width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    padding: 16px;
+  }
+
+  /* Adjust score chart for very small screens */
+  .score-chart-legend {
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+}
