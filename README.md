@@ -1,111 +1,102 @@
-# DyslexAI
+# DyslexAI 🧠✨
 
-DyslexAI is a full-stack learning platform for dyslexic learners with OCR-assisted handwriting workflows, adaptive exercises, teacher assignments, and a daily game curriculum.
+DyslexAI is an intelligent, full-stack learning platform designed to provide adaptive support for dyslexic learners. It features interactive OCR-assisted handwriting workflows, AI-generated adaptive exercises, teacher-assigned curriculums, and a daily 90-day game-based learning path. 
 
-## Tech Stack
+The platform leverages state-of-the-art Generative AI and Vision LLMs to actively validate student handwriting and tracing in real-time.
 
-- Frontend: React + TypeScript + Vite
-- Backend: FastAPI + SQLAlchemy
-- Auth: Supabase Auth with local user mapping
-- Database: SQLite (local) or PostgreSQL (Supabase)
-- OCR pipeline: DocTR + TrOCR + correction layers + optional Groq vision cross-check
+## 🚀 Key Features
 
-## Repository Layout
+### 🎓 For Students
+- **Daily Game Curriculum:** A structured 90-day learning path automatically seeded from our interactive curriculum (`seed_data_90_days.html`).
+- **Adaptive Exercises:** Dynamic exercises spanning Word Typing, Sentence Typing, Handwriting, and Tracing.
+- **OCR Studio:** Upload handwriting images for AI-driven transcription, correction, and historical progress tracking.
+- **Vision-Based Evaluation:** Tracing and handwriting exercises are scored using **Groq Vision LLMs**, evaluating not just what is written, but *how* closely the student followed the tracing guides to prevent gibberish scoring.
 
-- frontend: React web app
-- dyslexia-backend: FastAPI API and OCR pipeline
-- seed_data_90_days.html: 90-day game curriculum seed source
+### 👩‍🏫 For Teachers
+- **Teacher Dashboard:** An instantly loading, optimized dashboard offering collective stats, attendance tracking (last 30 days), and individual student deep dives.
+- **Custom Assignments:** Create and push custom assignments to students, or let the LLM generate targeted practice based on the student's current "struggling words."
+- **Performance Analytics:** Track letter-confusion patterns, accuracy by exercise type, and score trend progression.
 
-## Current Features
+### ⚙️ Engine & Architecture
+- **Zero-Latency Transitions:** On-the-fly LLM exercise generation is offloaded to background tasks to keep student navigation instantly responsive.
+- **Optimized Queries:** Dashboard and analytics use optimized group-by joins to completely eliminate N+1 query bottlenecks.
+- **Robust Auth:** Supabase Auth with Role-Based Access Control (RBAC) and teacher access-code gating.
+- **Mobile Responsive:** A fluid, fully responsive frontend that adapts flawlessly from desktop monitors to mobile phones.
 
-- Supabase-backed authentication (signup, login, session validation, logout)
-- Student and teacher roles with teacher access code gating
-- Adaptive exercise engine (typing, sentence typing, handwriting, tracing)
-- Assignment flows for teacher-created and LLM-generated exercises
-- OCR Studio for handwriting image upload, correction, and run history
-- Daily Exercises game mode seeded from the 90-day curriculum file
+---
 
-## Prerequisites
+## 🛠️ Tech Stack
 
-- Python 3.10+
-- Node.js 18+
-- npm 9+
+- **Frontend:** React 18, TypeScript, Vite, Responsive Vanilla CSS
+- **Backend:** FastAPI, SQLAlchemy, Pydantic
+- **Database:** PostgreSQL (via Supabase) / SQLite (local dev)
+- **AI / LLMs:** Groq (`llama-4-scout-17b-16e-instruct` for vision/evaluation)
+- **OCR Pipeline:** DocTR + TrOCR + Correction Layers
 
-## Environment Setup
+---
 
-1. Copy .env.example values into dyslexia-backend/.env.
-2. Add real values for Supabase and Groq keys.
-3. Optional frontend env overrides can be set in frontend/.env.
+## 💻 Environment Setup
 
-Important: Do not commit secrets. Keep real keys only in local .env files.
+1. Copy the `.env.example` file to create your local environment:
+   ```bash
+   cp .env.example dyslexia-backend/.env
+   ```
+2. Add your real **Supabase** and **Groq** API keys. *(Do not commit these!)*
+3. For local mobile testing, create a `frontend/.env.local` to point Vite to your local backend IP.
 
-## Backend Setup
+---
 
+## 🏃‍♂️ Running Locally
+
+### Backend Setup
 ```bash
 cd dyslexia-backend
 python3 -m venv ../.venv
 source ../.venv/bin/activate
 pip install -r requirements.txt
+
+# Start the API
+uvicorn app.main:app --host 0.0.0.0 --port 7860 --reload
 ```
+*Note: On startup, tables are auto-created from models. If the game curriculum is empty, it will auto-seed from `seed_data_90_days.html`.*
 
-Start API:
-
-```bash
-uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
-```
-
-Notes:
-- On startup, tables are created from SQLAlchemy models.
-- If game curriculum is empty, it auto-seeds from seed_data_90_days.html.
-- For SQLite, startup also runs incremental migration scripts in scripts/.
-
-## Frontend Setup
-
+### Frontend Setup
 ```bash
 cd frontend
 npm install
-npm run dev -- --host 127.0.0.1 --port 5173
+
+# Start the Vite dev server (exposed to local network for mobile testing)
+npm run dev -- --host
 ```
+Open [http://localhost:5173](http://localhost:5173) in your browser.
 
-Open http://127.0.0.1:5173
+---
 
-## Core API Areas
+## 📡 API Overview
 
-- Auth: /api/auth/*
-- Students: /api/students/*
-- Exercises: /api/exercises/*
-- Sessions: /api/sessions/*
-- OCR: /api/ocr/*
-- Dashboard: /api/dashboard/*
-- Assignments: /assignments/*
-- Game mode: /api/game/*
+- `/api/auth/*` — Authentication & Session management
+- `/api/students/*` — Student profiles & progress analytics
+- `/api/exercises/*` — Adaptive exercise engine & background LLM generation
+- `/api/sessions/*` — Exercise submission & Vision LLM validation
+- `/api/ocr/*` — Handwriting image processing pipeline
+- `/api/dashboard/*` — Optimized teacher analytics
+- `/api/assignments/*` — Assignment creation & status
+- `/api/game/*` — 90-day curriculum progression
 
-## Data and Runtime Notes
+---
 
-- OCR artifacts and uploads are stored under dyslexia-backend/data.
-- First OCR run may be slower due to model loading.
-- Groq-dependent features require GROQ_API_KEY.
-- Supabase auth flow requires SUPABASE_URL and SUPABASE_ANON_KEY.
-- Legacy local users can be migrated during login when SUPABASE_SERVICE_ROLE_KEY is set.
+## 🔧 Useful Commands
 
-## Useful Commands
-
-Seed adaptive exercises manually:
-
+**Manually seed the adaptive exercises database:**
 ```bash
 cd dyslexia-backend
 source ../.venv/bin/activate
 python db/seed.py
 ```
 
-Run OCR history cleanup migration (optional):
-
+**Run OCR history cleanup migration (optional):**
 ```bash
 cd dyslexia-backend
 source ../.venv/bin/activate
 python scripts/migrate_drop_raw_text_and_clear_ocr_history.py
 ```
-
-## License
-
-This project currently has no explicit license file in the repository.
