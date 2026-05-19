@@ -2,7 +2,7 @@
 
 DyslexAI is an intelligent, full-stack learning platform designed to provide adaptive support for dyslexic learners. It features interactive OCR-assisted handwriting workflows, AI-generated adaptive exercises, teacher-assigned curriculums, and a daily 90-day game-based learning path. 
 
-The platform leverages state-of-the-art Generative AI and Vision LLMs to actively validate student handwriting and tracing in real-time.
+The platform leverages state-of-the-art Generative AI and Vision LLMs to actively validate student tracing in real-time.
 
 ## Key Features
 
@@ -10,7 +10,7 @@ The platform leverages state-of-the-art Generative AI and Vision LLMs to activel
 - **Daily Game Curriculum:** A structured 90-day learning path automatically seeded from our interactive curriculum (`seed_data_90_days.html`).
 - **Adaptive Exercises:** Dynamic exercises spanning Word Typing, Sentence Typing, Handwriting, and Tracing.
 - **OCR Studio:** Upload handwriting images for AI-driven transcription, correction, and historical progress tracking.
-- **Vision-Based Evaluation:** Tracing and handwriting exercises are scored using **Groq Vision LLMs**, evaluating not just what is written, but *how* closely the student followed the tracing guides to prevent gibberish scoring.
+- **Vision-Based Evaluation:** Tracing exercises are scored using **Groq Vision LLMs**, evaluating not just what is written, but *how* closely the student followed the tracing guides to prevent gibberish scoring.
 
 ### For Teachers
 - **Teacher Dashboard:** An instantly loading, optimized dashboard offering collective stats, attendance tracking (last 30 days), and individual student deep dives.

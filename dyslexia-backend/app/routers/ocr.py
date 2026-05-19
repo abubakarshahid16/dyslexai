@@ -17,7 +17,6 @@ from app.database import get_db
 from app.deps import get_current_user
 from app.models.ocr_run import OCRRun
 from app.models.user import User
-from app.services._internal import correct_ocr_text_with_image
 from app.utils.diffing import levenshtein_ops
 
 router = APIRouter(prefix="/api/ocr", tags=["ocr"])
@@ -153,23 +152,8 @@ async def process_upload(
     finally:
         Path(path).unlink(missing_ok=True)
 
-    # Final correction pass: cross-check rough OCR text with original image using Groq vision.
-    vision_applied = False
-    vision_error: str | None = None
-    final_corrected_text = result.raw_text or ""
-    if (result.raw_text or "").strip():
-        try:
-            vision_corrected = correct_ocr_text_with_image(
-                rough_text=result.raw_text or "",
-                image_path=str(original_path),
-            )
-            if (vision_corrected or "").strip():
-                final_corrected_text = vision_corrected.strip()
-                vision_applied = True
-        except Exception as e:
-            vision_error = str(e)
-
-    result.corrected_text = final_corrected_text
+    # Use notebook pipeline correction layers only (no vision pass).
+    final_corrected_text = result.corrected_text or result.raw_text or ""
 
     lines_json = [_line_to_dict(line) for line in result.lines]
     avg_conf = sum(line.confidence for line in result.lines) / max(1, len(result.lines)) if result.lines else 0
@@ -189,9 +173,6 @@ async def process_upload(
     db.refresh(run)
 
     metadata = dict(result.metadata or {})
-    metadata["groq_vision_applied"] = vision_applied
-    if vision_error:
-        metadata["groq_vision_error"] = vision_error
     if reference_text and reference_text.strip():
         raw = result.raw_text or ""
         corrected = final_corrected_text

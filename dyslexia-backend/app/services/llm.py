@@ -18,6 +18,8 @@ from app.services._internal import (
     correct_ocr_text_with_image,
     transcribe_handwriting_image_with_image,
     generate_handwriting_feedback_with_image,
+    _get_vision_client,
+    VISION_MODEL,
 )
 
 def _get_client():
@@ -137,7 +139,52 @@ Rules:
             return "Good effort. Slow down and check each letter carefully. Try the same word again and improve your score."
         return "That was a tough one, and that's okay. Let’s practice slowly: say the word out loud, then write it letter by letter. Try again and aim for a higher score."
 
-# Vision functions live in app.services._internal; imported at top
+
+def generate_handwriting_feedback_from_text(
+    recognized_text: str,
+    expected_text: str,
+    score: float,
+    char_errors: list,
+    student_age: int,
+) -> str:
+    score_percent = round(score * 100)
+    recognized = (recognized_text or "").strip()
+    expected = (expected_text or "").strip()
+
+    prompt = f"""You are a supportive teacher reviewing a child's handwriting exercise.
+
+EXPECTED TEXT: "{expected}"
+STUDENT'S RECOGNIZED TEXT (OCR): "{recognized}"
+SCORE: {score_percent}%
+
+Write feedback that is specific to this exact exercise and compares what they wrote vs what was expected.
+
+Feedback must be:
+- Specific to this exercise (mention actual mistakes they made)
+- Ignore capitalization, commas, periods, apostrophes, and other punctuation completely
+- Do not comment on uppercase vs lowercase; only judge whether the content is correct
+- Focus only on missing, extra, or wrong letters/words
+- For a {student_age} year old (simple words)
+- Encouraging but honest (if they got it wrong, explain what they did wrong and what was expected)
+- 2-3 sentences maximum
+- Never mention dyslexia
+
+Return plain text only, no labels."""
+
+    try:
+        response = _get_client().chat.completions.create(
+            model=MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=220,
+            temperature=0.4,
+        )
+        text = (response.choices[0].message.content or "").strip()
+        return text or generate_feedback(score, char_errors, [], student_age, "handwriting")
+    except Exception as e:
+        print(f"Handwriting feedback generation failed: {e}")
+        return generate_feedback(score, char_errors, [], student_age, "handwriting")
+
+# Vision helpers live in app.services._internal; imported at top
 
 def generate_exercises(
     weak_words: list,
@@ -241,3 +288,88 @@ Example format:
     except Exception as e:
         print(f"Exercise generation failed: {e}")
         return []
+
+
+def validate_tracing_with_vision(
+    image_bytes: bytes,
+    expected_text: str,
+    student_age: int,
+    frontend_score: float,
+) -> dict:
+    if not image_bytes:
+        return {
+            "score": frontend_score,
+            "feedback": generate_feedback(frontend_score, [], [], student_age, "tracing"),
+        }
+
+    try:
+        base64_image = base64.b64encode(image_bytes).decode("utf-8")
+        prompt = f"""You are a supportive teacher evaluating a tracing exercise for a {student_age} year old.
+The student was supposed to trace the word: "{expected_text}"
+Look at the provided image. The dark background contains faint gray guide text, and the bright blue lines are what the student drew.
+You must check TWO things:
+1. Did the student actually write the expected word/letter? (Or did they just scribble gibberish?)
+2. Is the blue writing directly ON TOP of the faint gray guide text? (Or did they write it somewhere else on the canvas?)
+
+Return your response in exactly this format:
+WROTE_EXPECTED: [YES or NO]
+ON_TRACE: [YES or NO]
+FEEDBACK: [1-2 sentences of encouraging feedback. If they didn't write it, tell them to write carefully. If they wrote it but not on the trace, tell them to write ON the gray letters.]"""
+
+        completion = _get_vision_client().chat.completions.create(
+            model=VISION_MODEL,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
+                        },
+                    ],
+                }
+            ],
+            temperature=0.1,
+            max_tokens=200,
+        )
+
+        response_text = (completion.choices[0].message.content or "").strip()
+
+        wrote_marker = "WROTE_EXPECTED:"
+        on_trace_marker = "ON_TRACE:"
+        feedback_marker = "FEEDBACK:"
+
+        score = frontend_score
+        feedback = generate_feedback(frontend_score, [], [], student_age, "tracing")
+
+        wrote_idx = response_text.find(wrote_marker)
+        on_trace_idx = response_text.find(on_trace_marker)
+        feedback_idx = response_text.find(feedback_marker)
+
+        if wrote_idx != -1 and on_trace_idx != -1 and feedback_idx != -1:
+            wrote_val = response_text[wrote_idx + len(wrote_marker):on_trace_idx].strip().upper()
+            on_trace_val = response_text[on_trace_idx + len(on_trace_marker):feedback_idx].strip().upper()
+
+            wrote_yes = "YES" in wrote_val
+            on_trace_yes = "YES" in on_trace_val
+
+            if wrote_yes and on_trace_yes:
+                score = max(0.85, frontend_score)
+            elif wrote_yes and not on_trace_yes:
+                score = 0.50  # Wrote it, but not on trace
+            else:
+                score = min(0.20, frontend_score)  # Gibberish or wrong word
+
+            feedback = response_text[feedback_idx + len(feedback_marker):].strip()
+
+        return {
+            "score": score,
+            "feedback": feedback,
+        }
+    except Exception as e:
+        print(f"Vision tracing validation failed: {e}")
+        return {
+            "score": frontend_score,
+            "feedback": generate_feedback(frontend_score, [], [], student_age, "tracing"),
+        }
