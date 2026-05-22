@@ -18,6 +18,8 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 def _path_to_url_path(file_path: str | None) -> str | None:
     if not file_path:
         return None
+    if file_path.startswith("http"):
+        return file_path
     normalized = str(file_path).replace("\\", "/")
     idx = normalized.find("/data/")
     if idx != -1:
@@ -114,18 +116,23 @@ def get_student_progress(
 ):
     """Student progress for dashboard. OCR run counts scoped to current user."""
     students = db.query(Student).all()
+    
+    run_counts = (
+        db.query(OCRRun.student_id, func.count(OCRRun.id).label('cnt'))
+        .filter(OCRRun.user_id == current_user.id)
+        .filter(OCRRun.student_id.isnot(None))
+        .group_by(OCRRun.student_id)
+        .all()
+    )
+    
+    count_map = {str(row.student_id): row.cnt for row in run_counts}
+    
     result = []
     for s in students:
-        cnt = (
-            db.query(func.count(OCRRun.id))
-            .filter(OCRRun.user_id == current_user.id, OCRRun.student_id == str(s.id))
-            .scalar()
-            or 0
-        )
         result.append({
             "student_id": s.id,
             "student_name": s.name,
-            "total_runs": cnt,
+            "total_runs": count_map.get(str(s.id), 0),
             "avg_confidence": 0,
             "avg_correction_ratio": 0,
         })

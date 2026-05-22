@@ -7,7 +7,7 @@ export function HelpPage() {
         <p>
           After signing up or logging in, you can access the Dashboard for an overview,
           Workspace to upload and scan documents, Exercises for practice, and Daily
-          Exercises for gamified learning.
+          Lessons for gamified learning.
         </p>
       </section>
       <section>
@@ -31,7 +31,7 @@ export function HelpPage() {
         <p>
           Create a student profile, then get adaptive exercises. You can practice
           word typing, sentence typing, handwriting (photo upload), or letter tracing.
-          Daily Exercises adds XP, levels, and streaks for motivation.
+          Daily Lessons adds XP, levels, and streaks for motivation.
         </p>
       </section>
       <section>

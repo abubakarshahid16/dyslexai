@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 interface TracingCanvasProps {
   expected: string;
-  onComplete: (traceScore: number, durationSeconds: number, strokeErrors?: Array<{ letter: string; accuracy: number }>) => void;
+  onComplete: (traceScore: number, durationSeconds: number, strokeErrors?: Array<{ letter: string; accuracy: number }>, imageBase64?: string) => void;
   disabled?: boolean;
 }
 
@@ -482,7 +482,8 @@ export function TracingCanvas({ expected, onComplete, disabled }: TracingCanvasP
 
     // Make strict: allow very low scores for gibberish
     const clamped = Math.max(0.0, Math.min(1, Math.round(score * 100) / 100));
-    onComplete(clamped, durationSeconds, expected.split("").map((ch) => ({ letter: ch, accuracy: clamped })));
+    const imageBase64 = canvasRef.current?.toDataURL("image/png");
+    onComplete(clamped, durationSeconds, expected.split("").map((ch) => ({ letter: ch, accuracy: clamped })), imageBase64);
   };
 
   const handleClear = () => {

@@ -110,6 +110,9 @@ export function toAssetUrl(
   filePath?: string | null,
   urlPath?: string | null
 ): string | null {
+  if (urlPath && urlPath.startsWith("http")) return urlPath;
+  if (filePath && filePath.startsWith("http")) return filePath;
+  
   if (urlPath && (urlPath.startsWith("/data/") || urlPath.startsWith("/api/"))) {
     return `${SERVER_ROOT}${urlPath}`;
   }
@@ -330,6 +333,7 @@ export async function submitTracing(
     trace_score: number;
     duration_seconds?: number;
     stroke_errors?: Array<{ letter: string; accuracy: number }>;
+    image_base64?: string;
   }
 ): Promise<{ score: number; feedback: string }> {
   return parseJson(

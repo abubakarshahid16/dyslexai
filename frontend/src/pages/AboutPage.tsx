@@ -16,7 +16,7 @@ export function AboutPage() {
           <li>Document scan and OCR for handwritten text</li>
           <li>Multi-layer correction (lexical, contextual, spelling refinement)</li>
           <li>Learning exercises: word typing, sentence typing, handwriting, tracing</li>
-          <li>Daily Exercises path with XP, levels, and streaks</li>
+          <li>Daily Lessons path with XP, levels, and streaks</li>
           <li>Student progress tracking</li>
           <li>Teacher review portal for OCR results</li>
         </ul>

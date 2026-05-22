@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import Optional, List
 
-from app.database import get_db
+from app.database import get_db, SessionLocal
 from app.deps import get_current_user
 from app.models.exercise import Exercise
 from app.models.user import User
@@ -127,9 +127,38 @@ def is_short_handwriting_item(ex: Exercise) -> bool:
     return len(text.split()) <= 5
 
 
+def background_generate_exercises(level: int, age: int, weak_words: list, force_type: Optional[str] = None):
+    db = SessionLocal()
+    try:
+        generated = llm_generate(
+            weak_words  = weak_words,
+            difficulty  = level,
+            student_age = age,
+            count       = 3,
+            force_type  = force_type
+        )
+        for ex_data in generated:
+            new_ex = Exercise(
+                type         = ex_data["type"],
+                content      = ex_data["content"],
+                expected     = ex_data["expected"],
+                target_words = ex_data["target_words"],
+                difficulty   = level,
+                age_group    = "all",
+                source       = "ai_generated"
+            )
+            db.add(new_ex)
+        db.commit()
+    except Exception as e:
+        print("Background generation failed:", e)
+    finally:
+        db.close()
+
+
 @router.get("/next", response_model=ExerciseResponse)
 def get_next_exercise(
     student_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
     type:       Optional[str] = Query(None, description="Filter by exercise type: word_typing, sentence_typing, handwriting, tracing"),
     db:         Session       = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -180,27 +209,14 @@ def get_next_exercise(
     # words exist in the requested type. Generate them on the fly so the
     # student always gets targeted practice in the type they asked for.
     if type and weak_words and not struggle_pool:
-        generated = llm_generate(
-            weak_words  = list(weak_words),
-            difficulty  = level,
-            student_age = student.age or 10,
-            count       = 3,
-            force_type  = type
+        # Offload generation to background task so UI doesn't block
+        background_tasks.add_task(
+            background_generate_exercises,
+            level=level,
+            age=student.age or 10,
+            weak_words=list(weak_words),
+            force_type=type
         )
-        for ex_data in generated:
-            new_ex = Exercise(
-                type         = ex_data["type"],
-                content      = ex_data["content"],
-                expected     = ex_data["expected"],
-                target_words = ex_data["target_words"],
-                difficulty   = level,
-                age_group    = "all",
-                source       = "ai_generated"
-            )
-            db.add(new_ex)
-            struggle_pool.append(new_ex)
-        if generated:
-            db.commit()
 
     # ── Cross-type letter tracing pool ───────────────────────────────
     # When the student is NOT explicitly requesting a type, inject tracing
@@ -280,29 +296,44 @@ def get_next_exercise(
     # final fallback — if still nothing, generate exercises with LLM
     # for the requested type so the student always has something to start with
     if not chosen and type:
-        # use weak words if available, otherwise generate generic exercises for this type
-        words_to_use = list(weak_words) if weak_words else ["cat", "dog", "run", "jump", "play"]
-        generated = llm_generate(
-            weak_words  = words_to_use,
-            difficulty  = level,
-            student_age = student.age or 10,
-            count       = 3,
-            force_type  = type
-        )
-        for ex_data in generated:
-            new_ex = Exercise(
-                type         = ex_data["type"],
-                content      = ex_data["content"],
-                expected     = ex_data["expected"],
-                target_words = ex_data["target_words"],
-                difficulty   = level,
-                age_group    = "all",
-                source       = "ai_generated"
+        # We MUST block here if there's truly nothing to return, but let's try to grab ANY exercise
+        # from any type as an absolute last resort before blocking
+        any_exercise = db.query(Exercise).filter(Exercise.id.notin_(recent_ids)).first()
+        if any_exercise:
+            chosen = any_exercise
+            # Fire background generation for the requested type
+            words_to_use = list(weak_words) if weak_words else ["cat", "dog", "run", "jump", "play"]
+            background_tasks.add_task(
+                background_generate_exercises,
+                level=level,
+                age=student.age or 10,
+                weak_words=words_to_use,
+                force_type=type
             )
-            db.add(new_ex)
-        if generated:
-            db.commit()
-            chosen = new_ex  # return the last generated exercise
+        else:
+            # Absolute worst case: block and generate synchronously
+            words_to_use = list(weak_words) if weak_words else ["cat", "dog", "run", "jump", "play"]
+            generated = llm_generate(
+                weak_words  = words_to_use,
+                difficulty  = level,
+                student_age = student.age or 10,
+                count       = 3,
+                force_type  = type
+            )
+            for ex_data in generated:
+                new_ex = Exercise(
+                    type         = ex_data["type"],
+                    content      = ex_data["content"],
+                    expected     = ex_data["expected"],
+                    target_words = ex_data["target_words"],
+                    difficulty   = level,
+                    age_group    = "all",
+                    source       = "ai_generated"
+                )
+                db.add(new_ex)
+            if generated:
+                db.commit()
+                chosen = new_ex  # return the last generated exercise
 
     if not chosen:
         raise HTTPException(status_code=404, detail="No exercises found for this student")

@@ -57,6 +57,7 @@ class TracingSubmit(BaseModel):
     trace_score: float               # 0.0–1.0 overall accuracy, computed by frontend
     duration_seconds: Optional[int] = None
     stroke_errors: Optional[List[StrokeError]] = []
+    image_base64: Optional[str] = None
 
 
 class TracingSubmitResponse(BaseModel):

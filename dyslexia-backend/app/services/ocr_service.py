@@ -13,6 +13,7 @@ The full OCR Studio still uses `/api/ocr/process` which runs the notebook pipeli
 from __future__ import annotations
 
 import io
+from pathlib import Path
 from typing import Any
 
 from PIL import Image
@@ -38,10 +39,16 @@ def _get_simple_trocr():
     import torch  # type: ignore
     from transformers import TrOCRProcessor, VisionEncoderDecoderModel  # type: ignore
 
-    # Explicitly use the handwritten TrOCR Large model.
-    model_name = getattr(settings.models, "trocr_model_name", "microsoft/trocr-large-handwritten") or "microsoft/trocr-large-handwritten"
-    if "trocr-large-handwritten" not in str(model_name).lower():
-        model_name = "microsoft/trocr-large-handwritten"
+    # Explicitly use the handwritten TrOCR Large model unless a local fine-tuned model is present.
+    default_model = "microsoft/trocr-large-handwritten"
+    model_name = getattr(settings.models, "trocr_model_name", default_model) or default_model
+    local_model_dir = Path(__file__).resolve().parents[1] / "finetuned_model"
+    if Path(model_name).is_dir():
+        model_name = model_name
+    elif local_model_dir.is_dir():
+        model_name = str(local_model_dir)
+    elif "trocr-large-handwritten" not in str(model_name).lower():
+        model_name = default_model
 
     _simple_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     _simple_processor = TrOCRProcessor.from_pretrained(model_name, use_fast=False)

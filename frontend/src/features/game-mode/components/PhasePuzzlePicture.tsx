@@ -261,7 +261,7 @@ export function PhasePuzzlePicture({ phase, startDay, totalSlots, earnedDayNumbe
         />
       </svg>
       <figcaption className="gm-puzzle-caption">
-        Each tile is a <strong>day</strong> in this phase. Finish that day in Daily Exercises to reveal that part of the picture.
+        Each tile is a <strong>day</strong> in this phase. Finish that day in Daily Lessons to reveal that part of the picture.
       </figcaption>
     </figure>
   );

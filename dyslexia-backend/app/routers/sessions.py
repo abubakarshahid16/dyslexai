@@ -15,8 +15,7 @@ from app.services.evaluator import evaluate_response
 import uuid
 from app.services.llm import (
     generate_feedback as llm_feedback,
-    generate_handwriting_feedback_with_image,
-    transcribe_handwriting_image_with_image,
+    generate_handwriting_feedback_from_text,
 )
 from app.models.exercise import Exercise as ExerciseModel
 from app.services.ocr_service import process_handwriting_image
@@ -260,10 +259,9 @@ async def submit_handwriting(
                    "Please retake the photo with better lighting and clearer writing."
         )
 
-    # Use the vision LLM transcription for the text shown to the user and the score.
-    llm_recognized_text = transcribe_handwriting_image_with_image(image_bytes)
-    recognized_text = llm_recognized_text.strip() or raw_ocr_text
-    ocr_confidence = 1.0 if llm_recognized_text.strip() else ocr_result["confidence"]
+    # Use raw OCR text for scoring and feedback.
+    recognized_text = raw_ocr_text.strip()
+    ocr_confidence = ocr_result["confidence"]
 
     # ── 1. Evaluate against the LLM transcription (what the student wrote) ────
     result = evaluate_response(
@@ -299,19 +297,15 @@ async def submit_handwriting(
     # ── 5. Adjust difficulty ─────────────────────────────────────────
     new_level = update_difficulty(db, student)
 
-    # ── 6. LLM feedback with image analysis ─────────────────────────
-    # For handwriting: pass image to LLM to read and provide specific feedback.
+    # ── 6. LLM feedback with OCR text ───────────────────────────────
     age = student.age or 10
-    feedback_result = generate_handwriting_feedback_with_image(
-        image_bytes      = image_bytes,
-        recognized_text  = recognized_text,
-        expected_text    = session.expected,
-        score            = result["score"],
-        char_errors      = result["char_errors"],
-        student_age      = age
+    feedback = generate_handwriting_feedback_from_text(
+        recognized_text=recognized_text,
+        expected_text=session.expected,
+        score=result["score"],
+        char_errors=result["char_errors"],
+        student_age=age,
     )
-    recognized_text  = feedback_result["recognized_text"]
-    feedback         = feedback_result["feedback"]
     session.feedback = feedback
     db.commit()
 
@@ -384,13 +378,45 @@ def submit_tracing(
 
     # ── 5. LLM feedback ─────────────────────────────────────────────
     age = student.age or 10
-    feedback = llm_feedback(
-        score         = trace_score,
-        char_errors   = stroke_errors,
-        target_words  = target_words,
-        student_age   = age,
-        exercise_type = "tracing"
-    )
+    feedback = ""
+    
+    if data.image_base64:
+        import base64
+        try:
+            # Format is usually 'data:image/png;base64,...'
+            b64_str = data.image_base64
+            if "," in b64_str:
+                b64_str = b64_str.split(",", 1)[1]
+            image_bytes = base64.b64decode(b64_str)
+            from app.services.llm import validate_tracing_with_vision
+            result = validate_tracing_with_vision(
+                image_bytes=image_bytes,
+                expected_text=session.expected,
+                student_age=age,
+                frontend_score=trace_score
+            )
+            trace_score = result["score"]
+            session.score = trace_score # Update session score based on LLM validation
+            session.phonetic_score = trace_score
+            feedback = result["feedback"]
+        except Exception as e:
+            print(f"Tracing validation failed: {e}")
+            feedback = llm_feedback(
+                score         = trace_score,
+                char_errors   = stroke_errors,
+                target_words  = target_words,
+                student_age   = age,
+                exercise_type = "tracing"
+            )
+    else:
+        feedback = llm_feedback(
+            score         = trace_score,
+            char_errors   = stroke_errors,
+            target_words  = target_words,
+            student_age   = age,
+            exercise_type = "tracing"
+        )
+        
     session.feedback = feedback
     db.commit()
 

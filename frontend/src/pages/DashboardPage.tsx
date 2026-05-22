@@ -189,9 +189,9 @@ export function DashboardPage() {
         {exerciseStats && <StudentStatsCard stats={exerciseStats} />}
 
         <div className="card dashboard-game-card">
-          <h3>Daily Exercises</h3>
+          <h3>Daily Lessons</h3>
           {gameLoading ? (
-            <div style={{ textAlign: "center", padding: 12 }}>Loading Daily Exercises…</div>
+            <div style={{ textAlign: "center", padding: 12 }}>Loading Daily Lessons…</div>
           ) : gameSummary ? (
             <>
               <p style={{ color: "var(--color-text-secondary)", marginTop: 0, marginBottom: 12 }}>
@@ -235,11 +235,11 @@ export function DashboardPage() {
                 </p>
               )}
               <Link to="/game" className="btn primary" style={{ minHeight: 44, padding: "10px 18px", fontSize: "1rem" }}>
-                Open Daily Exercises
+                Open Daily Lessons
               </Link>
             </>
           ) : (
-            <p style={{ color: "var(--color-text-muted)" }}>Daily Exercises progress unavailable. Open Daily Exercises once while logged in.</p>
+            <p style={{ color: "var(--color-text-muted)" }}>Daily Lessons progress unavailable. Open Daily Lessons once while logged in.</p>
           )}
         </div>
 

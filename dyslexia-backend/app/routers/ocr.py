@@ -7,6 +7,8 @@ import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+import httpx
+import os
 from PIL import Image
 from sqlalchemy.orm import Session
 
@@ -15,7 +17,6 @@ from app.database import get_db
 from app.deps import get_current_user
 from app.models.ocr_run import OCRRun
 from app.models.user import User
-from app.services.llm import correct_ocr_text_with_image
 from app.utils.diffing import levenshtein_ops
 
 router = APIRouter(prefix="/api/ocr", tags=["ocr"])
@@ -34,6 +35,8 @@ def _get_pipeline():
 def _path_to_url_path(file_path: str | None) -> str | None:
     if not file_path:
         return None
+    if str(file_path).startswith("http"):
+        return file_path
     normalized = str(file_path).replace("\\", "/")
     idx = normalized.find("/data/")
     if idx != -1:
@@ -69,6 +72,29 @@ def _line_to_dict(line) -> dict:
     }
 
 
+def upload_to_supabase_storage(filename: str, image_bytes: bytes, content_type: str) -> str | None:
+    supabase_url = os.getenv("SUPABASE_URL", "").rstrip("/")
+    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip() or os.getenv("SUPABASE_ANON_KEY", "").strip()
+    if not supabase_url or not key:
+        return None
+        
+    url = f"{supabase_url}/storage/v1/object/ocr-images/{filename}"
+    headers = {
+        "Authorization": f"Bearer {key}",
+        "apikey": key,
+        "Content-Type": content_type,
+    }
+    
+    with httpx.Client(timeout=30.0) as client:
+        res = client.post(url, headers=headers, content=image_bytes)
+        
+    if res.status_code >= 400:
+        print(f"Supabase storage upload failed: {res.text}")
+        return None
+        
+    return f"{supabase_url}/storage/v1/object/public/ocr-images/{filename}"
+
+
 @router.post("/process")
 async def process_upload(
     file: UploadFile = File(...),
@@ -97,9 +123,17 @@ async def process_upload(
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
     suffix = Path(file.filename or "upload.png").suffix.lower() or ".png"
     safe_name = Path(file.filename or "upload.png").name
-    original_path = settings.upload_dir / f"{Path(safe_name).stem}_{abs(hash(safe_name))}{suffix}"
+    filename = f"{Path(safe_name).stem}_{abs(hash(safe_name))}{suffix}"
+    original_path = settings.upload_dir / filename
     with open(original_path, "wb") as f:
         f.write(image_bytes)
+        
+    # Upload to Supabase Storage for persistence
+    public_url = None
+    try:
+        public_url = upload_to_supabase_storage(filename, image_bytes, file.content_type or "image/png")
+    except Exception as e:
+        print(f"Failed to upload to Supabase: {e}")
 
     try:
         grayscale = Image.open(io.BytesIO(image_bytes)).convert("L")
@@ -118,23 +152,8 @@ async def process_upload(
     finally:
         Path(path).unlink(missing_ok=True)
 
-    # Final correction pass: cross-check rough OCR text with original image using Groq vision.
-    vision_applied = False
-    vision_error: str | None = None
-    final_corrected_text = result.raw_text or ""
-    if (result.raw_text or "").strip():
-        try:
-            vision_corrected = correct_ocr_text_with_image(
-                rough_text=result.raw_text or "",
-                image_path=str(original_path),
-            )
-            if (vision_corrected or "").strip():
-                final_corrected_text = vision_corrected.strip()
-                vision_applied = True
-        except Exception as e:
-            vision_error = str(e)
-
-    result.corrected_text = final_corrected_text
+    # Use notebook pipeline correction layers only (no vision pass).
+    final_corrected_text = result.corrected_text or result.raw_text or ""
 
     lines_json = [_line_to_dict(line) for line in result.lines]
     avg_conf = sum(line.confidence for line in result.lines) / max(1, len(result.lines)) if result.lines else 0
@@ -147,16 +166,13 @@ async def process_upload(
         corrected_text=final_corrected_text,
         avg_confidence=avg_conf,
         suspicious_lines=suspicious,
-        original_image_path=str(original_path),
+        original_image_path=public_url or str(original_path),
     )
     db.add(run)
     db.commit()
     db.refresh(run)
 
     metadata = dict(result.metadata or {})
-    metadata["groq_vision_applied"] = vision_applied
-    if vision_error:
-        metadata["groq_vision_error"] = vision_error
     if reference_text and reference_text.strip():
         raw = result.raw_text or ""
         corrected = final_corrected_text
@@ -168,7 +184,7 @@ async def process_upload(
             "cer_approx": round(cer, 4),
         }
 
-    original_url = _path_to_url_path(str(original_path))
+    original_url = _path_to_url_path(public_url or str(original_path))
     triage_dict = (
         {
             "blur_score": result.triage.blur_score,
@@ -188,7 +204,7 @@ async def process_upload(
         "student_id": int(student_id) if student_id is not None and str(student_id).isdigit() else None,
         "corrected_text": final_corrected_text,
         "metadata": metadata,
-        "original_image_path": str(original_path),
+        "original_image_path": public_url or str(original_path),
         "original_image_url": original_url,
         "annotated_image_path": None,
         "preprocessed_image_path": None,

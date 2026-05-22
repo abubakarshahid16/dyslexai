@@ -1,10 +1,12 @@
-# 🌐 DyslexAI Web: Comprehensive Dyslexia Support Ecosystem
+# 🌐 DyslexAI: Comprehensive Dyslexia Support Ecosystem
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
 
-**DyslexAI Web** is a professional, web-based educational platform designed to support students with dyslexia and provide teachers with powerful AI-driven assessment tools. It brings the power of the DyslexAI handwriting engine to the browser, enabling accessible education for everyone, everywhere.
+**DyslexAI** is an intelligent, full-stack learning platform designed to provide adaptive support for dyslexic learners. It features interactive OCR-assisted handwriting workflows, AI-generated adaptive exercises, teacher-assigned curriculums, and a daily 90-day game-based learning path. 
+
+The platform leverages state-of-the-art Generative AI and Vision LLMs to actively validate student tracing in real-time.
 
 ---
 
@@ -19,53 +21,100 @@
 
 ---
 
-## 🚀 World-Class Features
+## 🚀 Key Features
 
-### 🖋️ Handwriting Analysis Portal
-Upload or capture student handwriting directly through the web interface. Our backend AI (TrOCR Large) analyzes the input and identifies phonetic errors, reversals (b/d, p/q), and spelling patterns common in dyslexia.
+### For Students
+- **Daily Game Curriculum:** A structured 90-day learning path automatically seeded from our interactive curriculum (`seed_data_90_days.html`).
+- **Adaptive Exercises:** Dynamic exercises spanning Word Typing, Sentence Typing, Handwriting, and Tracing.
+- **OCR Studio:** Upload handwriting images for AI-driven transcription, correction, and historical progress tracking.
+- **Vision-Based Evaluation:** Tracing exercises are scored using **Groq Vision LLMs**, evaluating not just what is written, but *how* closely the student followed the tracing guides to prevent gibberish scoring.
 
-### 🏫 Teacher Dashboard
-A centralized hub for classroom management.
-*   **Student Progress:** Monitor real-time stats for entire cohorts.
-*   **Assignment Builder:** Use AI to generate custom reading and writing assignments.
-*   **Mastery Tracking:** Visualize word-level mastery trends over time.
+### For Teachers
+- **Teacher Dashboard:** An instantly loading, optimized dashboard offering collective stats, attendance tracking (last 30 days), and individual student deep dives.
+- **Custom Assignments:** Create and push custom assignments to students, or let the LLM generate targeted practice based on the student's current "struggling words."
+- **Performance Analytics:** Track letter-confusion patterns, accuracy by exercise type, and score trend progression.
 
-### 🎮 Gamified Learning
-Complete the 90-day adaptive curriculum. The web app synchronizes with the mobile platform to ensure a seamless "learning anywhere" experience.
+### Engine & Architecture
+- **Zero-Latency Transitions:** On-the-fly LLM exercise generation is offloaded to background tasks to keep student navigation instantly responsive.
+- **Optimized Queries:** Dashboard and analytics use optimized group-by joins to completely eliminate N+1 query bottlenecks.
+- **Robust Auth:** Supabase Auth with Role-Based Access Control (RBAC) and teacher access-code gating.
+- **Mobile Responsive:** A fluid, fully responsive frontend that adapts flawlessly from desktop monitors to mobile phones.
 
 ---
 
 ## 🏗️ Technical Architecture
 
-*   **Frontend:** Modern React + TypeScript powered by **Vite** for lightning-fast performance and a premium UI.
+*   **Frontend:** Modern React 18 + TypeScript powered by **Vite** for lightning-fast performance and a premium, responsive UI (Vanilla CSS).
 *   **Backend:** High-performance **FastAPI** service handling authentication, gamification logic, and database management.
-*   **AI Engine:** Integrated OCR and NLP pipelines for handwriting correction and phonetic analysis.
-*   **Database:** Scalable architecture supporting both SQLite for local development and PostgreSQL for production.
+*   **AI Engine:** Integrated OCR (DocTR + TrOCR + Correction Layers) and NLP pipelines for handwriting correction/phonetic analysis, plus Groq (`llama-4-scout-17b-16e-instruct` or similar) for vision-based evaluation.
+*   **Database:** Scalable architecture supporting SQLite for local development and PostgreSQL (via Supabase) for production.
 
 ---
 
-## 🛠️ Installation & Setup
+## 🛠️ Environment Setup & Installation
 
-### Prerequisites
-*   Node.js v18+
-*   Python 3.10+
-*   PostgreSQL or SQLite
+### 1. Environment Configuration
+1. Copy the `.env.example` file to create your local environment:
+   ```bash
+   cp .env.example dyslexia-backend/.env
+   ```
+2. Add your real **Supabase** and **Groq** API keys. *(Do not commit these!)*
+3. For local mobile testing, create a `frontend/.env.local` to point Vite to your local backend IP.
 
-### Steps to Run
+### 2. Running Locally
 
-1.  **Backend Setup:**
-    ```bash
-    cd dyslexia-backend
-    pip install -r requirements.txt
-    uvicorn app.main:app --port 8000
-    ```
+#### Backend Setup
+```bash
+cd dyslexia-backend
+python3 -m venv ../.venv
+source ../.venv/bin/activate
+pip install -r requirements.txt
 
-2.  **Frontend Setup:**
-    ```bash
-    cd frontend
-    npm install
-    npm run dev
-    ```
+# Start the API
+uvicorn app.main:app --host 0.0.0.0 --port 7860 --reload
+```
+*Note: On startup, tables are auto-created from models. If the game curriculum is empty, it will auto-seed from `seed_data_90_days.html`.*
+
+#### Frontend Setup
+```bash
+cd frontend
+npm install
+
+# Start the Vite dev server (exposed to local network for mobile testing)
+npm run dev -- --host
+```
+Open [http://localhost:5173](http://localhost:5173) in your browser.
+
+---
+
+## 🔍 API Overview
+
+- `/api/auth/*` — Authentication & Session management
+- `/api/students/*` — Student profiles & progress analytics
+- `/api/exercises/*` — Adaptive exercise engine & background LLM generation
+- `/api/sessions/*` — Exercise submission & Vision LLM validation
+- `/api/ocr/*` — Handwriting image processing pipeline
+- `/api/dashboard/*` — Optimized teacher analytics
+- `/api/assignments/*` — Assignment creation & status
+- `/api/game/*` — 90-day curriculum progression
+
+---
+
+## ⚙️ Useful Commands
+
+**Manually seed the adaptive exercises database:**
+```bash
+cd dyslexia-backend
+source ../.venv/bin/activate
+python db/seed.py
+```
+
+**Run OCR history cleanup migration (optional):**
+```bash
+cd dyslexia-backend
+source ../.venv/bin/activate
+python scripts/migrate_drop_raw_text_and_clear_ocr_history.py
+```
 
 ---
 
@@ -81,8 +130,10 @@ Complete the 90-day adaptive curriculum. The web app synchronizes with the mobil
 ## 🤝 Contributing
 Join us in making education accessible to all! Open an issue or submit a pull request.
 
+---
+
 ## 📄 License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
-Created with ❤️ by **Abubakar Shahid**
+Created with ❤️ by **Abubakar Shahid** and **Muhammad Ali Zaib**

@@ -320,7 +320,7 @@ export function ExercisesPage() {
           {isTracing && exercise && (
             <TracingCanvas
               expected={exercise.expected}
-              onComplete={async (traceScore, durationSeconds, strokeErrors) => {
+              onComplete={async (traceScore, durationSeconds, strokeErrors, imageBase64) => {
                 if (!sessionId) return;
                 setBusy(true);
                 setError(null);
@@ -328,7 +328,8 @@ export function ExercisesPage() {
                   const res = await submitTracing(sessionId, {
                     trace_score: traceScore,
                     duration_seconds: durationSeconds,
-                    stroke_errors: strokeErrors
+                    stroke_errors: strokeErrors,
+                    image_base64: imageBase64
                   });
                   setResult(res);
                 } catch (err) {

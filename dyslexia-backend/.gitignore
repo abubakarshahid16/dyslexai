@@ -1,29 +1,23 @@
-.env
-*.env
-!*.env.example
-
 # Python
 __pycache__/
-*.pyc
+*.py[cod]
 .pytest_cache/
 .venv/
 venv/
 
-# Local data / artifacts (generated during runs)
-data/
-artifacts/
-debug_outputs/
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Local database
 *.db
-*.log
 
-# Notebook noise
-.ipynb_checkpoints/
-
-# OS / editor
+# OS
 .DS_Store
-Thumbs.db
 
-# OCR / proof artifacts
-auth_proof_report.json
-auth_proof_test.db
-FINAL_OCR_REGRESSION_REPORT.json
+# Large ML model files — loaded from HuggingFace Hub at runtime
+app/finetuned_model/
+
+# Runtime OCR artifacts — exclude ALL data subdirectories
+data/
